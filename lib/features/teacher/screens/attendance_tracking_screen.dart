@@ -285,7 +285,6 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
   }
 
   Widget _buildStudentList(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),

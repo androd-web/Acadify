@@ -14,7 +14,6 @@ class _TeacherScheduleManagementState extends State<TeacherScheduleManagement> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
@@ -418,20 +417,6 @@ class _TeacherScheduleManagementState extends State<TeacherScheduleManagement> {
           color: isActive ? AppColors.secondaryContainer.withValues(alpha: 0.2) : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: isActive ? AppColors.secondary : colorScheme.onSurface.withValues(alpha: 0.1)),
-        ),
-        child: Text(label, textAlign: TextAlign.center, style: AppTextStyles.labelMedium.copyWith(color: isActive ? AppColors.secondary : AppColors.onSurfaceVariant)),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String label, bool isActive) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.secondaryContainer.withValues(alpha: 0.2) : AppColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isActive ? AppColors.secondary : Colors.white10),
         ),
         child: Text(label, textAlign: TextAlign.center, style: AppTextStyles.labelMedium.copyWith(color: isActive ? AppColors.secondary : AppColors.onSurfaceVariant)),
       ),

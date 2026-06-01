@@ -19,7 +19,6 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

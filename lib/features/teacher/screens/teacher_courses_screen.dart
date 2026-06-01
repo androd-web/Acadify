@@ -9,7 +9,6 @@ class TeacherCoursesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
@@ -47,7 +46,6 @@ class TeacherCoursesScreen extends StatelessWidget {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Positioned(
       top: 0,
       left: 0,
@@ -503,7 +501,7 @@ class TeacherCoursesScreen extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(icon, color: Colors.white, size: 24),
+                  Icon(icon, color: Colors.white, size: 24),
                   const SizedBox(width: 4),
                   Text(label, style: AppTextStyles.labelMedium.copyWith(color: Colors.white)),
                 ],
@@ -512,7 +510,7 @@ class TeacherCoursesScreen extends StatelessWidget {
           else
             Column(
               children: [
-                const Icon(icon, color: AppColors.onSurfaceVariant, size: 24),
+                Icon(icon, color: AppColors.onSurfaceVariant, size: 24),
                 const SizedBox(height: 4),
                 Text(label, style: AppTextStyles.labelMedium),
               ],
