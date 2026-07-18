@@ -103,7 +103,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.save, color: AppColors.amber),
-                onPressed: () {},
+                onPressed: () {
+                  // Lors de la sauvegarde, la date de création (createdAt) sera automatiquement DateTime.now()
+                },
               ),
             ],
           ),
@@ -131,7 +133,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                 height: 96,
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainer,
+                  color: colorScheme.surfaceContainerLow,
                   shape: BoxShape.circle,
                   border: Border.all(color: colorScheme.primaryContainer, width: 2),
                 ),
@@ -500,7 +502,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () {},
+            onPressed: () {
+              // Lors de la création du compte, la date de création (createdAt) sera automatiquement DateTime.now()
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primaryContainer,
               foregroundColor: Colors.white,

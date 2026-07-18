@@ -52,7 +52,10 @@ class UserModel {
         orElse: () => UserStatus.pending,
       ),
       subjects: map['subjects'] != null ? List<String>.from(map['subjects']) : null,
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
+      // Si createdAt est nul dans Firestore, on met automatiquement la date actuelle
+      createdAt: map['createdAt'] != null
+          ? (map['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
     );
   }
 

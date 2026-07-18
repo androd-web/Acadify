@@ -68,7 +68,7 @@ class AuthService {
     }
   }
 
-  // Inscription étudiant
+  // Inscription étudiant (La date de création est ajoutée automatiquement ici)
   Future<UserModel?> registerStudent({
     required String name,
     required String email,
@@ -96,7 +96,7 @@ class AuthService {
 
       User? user = result.user;
       if (user != null) {
-        // 3. Créer le document Firestore
+        // 3. Créer le document Firestore avec la date de création automatique
         UserModel newUser = UserModel(
           uid: user.uid,
           name: name,
@@ -107,7 +107,7 @@ class AuthService {
           niveau: niveau,
           status: UserStatus.active,
           forcePasswordChange: false,
-          createdAt: DateTime.now(),
+          createdAt: DateTime.now(), // Date automatique
         );
 
         await _firestore.collection('users').doc(user.uid).set(newUser.toMap());
@@ -128,7 +128,7 @@ class AuthService {
     }
   }
 
-  // Inscription enseignant
+  // Inscription enseignant (La date de création est ajoutée automatiquement ici)
   Future<UserModel?> registerTeacher({
     required String name,
     required String email,
@@ -155,7 +155,7 @@ class AuthService {
 
       User? user = result.user;
       if (user != null) {
-        // 3. Créer le document Firestore
+        // 3. Créer le document Firestore avec la date de création automatique
         UserModel newUser = UserModel(
           uid: user.uid,
           name: name,
@@ -166,7 +166,7 @@ class AuthService {
           niveau: 'Expert',
           status: UserStatus.pending, // En attente de validation
           forcePasswordChange: false,
-          createdAt: DateTime.now(),
+          createdAt: DateTime.now(), // Date automatique
         );
 
         await _firestore.collection('users').doc(user.uid).set(newUser.toMap());
@@ -187,7 +187,7 @@ class AuthService {
     }
   }
 
-  // Inscription admin
+  // Inscription admin (La date de création est ajoutée automatiquement ici)
   Future<UserModel?> registerAdmin({
     required String name,
     required String email,
@@ -203,7 +203,7 @@ class AuthService {
 
       User? user = result.user;
       if (user != null) {
-        // 3. Créer le document Firestore
+        // 3. Créer le document Firestore avec la date de création automatique
         UserModel newUser = UserModel(
           uid: user.uid,
           name: name,
@@ -214,7 +214,7 @@ class AuthService {
           niveau: 'Directeur',
           status: UserStatus.pending,
           forcePasswordChange: false,
-          createdAt: DateTime.now(),
+          createdAt: DateTime.now(), // Date automatique
         );
 
         await _firestore.collection('users').doc(user.uid).set(newUser.toMap());

@@ -57,6 +57,7 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
 
       setState(() => _isLoading = true);
       try {
+        // registerStudent va automatiquement ajouter la date de création (createdAt)
         UserModel? user = await _authService.registerStudent(
           name: "${_nomController.text.trim()} ${_prenomController.text.trim()}",
           email: _emailController.text.trim(),
