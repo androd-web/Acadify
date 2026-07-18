@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/course_service.dart';
+import '../../../core/models/course_model.dart';
 
 class UploadCourseScreen extends StatefulWidget {
   const UploadCourseScreen({super.key});
@@ -10,8 +15,100 @@ class UploadCourseScreen extends StatefulWidget {
 }
 
 class _UploadCourseScreenState extends State<UploadCourseScreen> {
+  final CourseService _courseService = CourseService();
+  final TextEditingController _titleController = TextEditingController();
+  final Box _userBox = Hive.box('userBox');
+
   String _selectedType = 'Cours';
   final List<String> _types = ['Cours', 'TD', 'TP', 'Examen', 'Autre'];
+  
+  List<CourseModel> _courses = [];
+  String? _selectedCourseId;
+  File? _selectedFile;
+  bool _isLoadingCourses = true;
+  bool _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCourses();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCourses() async {
+    final String? uid = _userBox.get('uid');
+    if (uid != null) {
+      final courses = await _courseService.getTeacherCourses(uid);
+      if (mounted) {
+        setState(() {
+          _courses = courses;
+          if (_courses.isNotEmpty) _selectedCourseId = _courses.first.id;
+          _isLoadingCourses = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'docx', 'doc'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _selectedFile = File(result.files.single.path!);
+      });
+    }
+  }
+
+  Future<void> _handleUpload() async {
+    if (_selectedCourseId == null || _selectedFile == null || _titleController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Veuillez remplir tous les champs et sélectionner un fichier.')),
+      );
+      return;
+    }
+
+    setState(() => _isUploading = true);
+
+    final success = await _courseService.uploadDocument(
+      courseId: _selectedCourseId!,
+      title: _titleController.text.trim(),
+      type: _getDocumentType(_selectedType),
+      file: _selectedFile!,
+      teacherId: _userBox.get('uid'),
+      teacherName: _userBox.get('name'),
+    );
+
+    if (mounted) {
+      setState(() => _isUploading = false);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Document publié avec succès !')),
+        );
+        context.pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de la publication.')),
+        );
+      }
+    }
+  }
+
+  DocumentType _getDocumentType(String type) {
+    switch (type) {
+      case 'TD': return DocumentType.td;
+      case 'TP': return DocumentType.tp;
+      case 'Examen': return DocumentType.examen;
+      default: return DocumentType.cours;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,12 +131,20 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
                   const SizedBox(height: 4),
                   Text('Partagez vos ressources pédagogiques avec vos étudiants', style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 32),
-                  _buildForm(context),
+                  if (_isLoadingCourses)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    _buildForm(context),
                   const SizedBox(height: 120),
                 ],
               ),
             ),
           ),
+          if (_isUploading)
+            Container(
+              color: Colors.black54,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
           _buildBottomAction(context),
           _buildBottomNavBar(context),
         ],
@@ -49,6 +154,8 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
 
   Widget _buildAppBar(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final String? photoUrl = _userBox.get('photoUrl');
+
     return Positioned(
       top: 0,
       left: 0,
@@ -64,15 +171,18 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
                 height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  image: const DecorationImage(
-                    image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuAZyE49QaJPhbGBVzU6NYX-IrO_BJXh91OGq632kyXnmvcR_QRIbQRmuVWQtYpR5kaKNBJOmmGE9DZb6NTFB6GRKh44Rwzs9dhCajN9C4i3oCFtOBweI36Snz6wmsH9CDGGaLLrx0IKmm4NxstohTE7Zsa1HevnLKcipNv6zfhu9oGZjwPYAV8fQG_XA2cAB88wIE1_47U4YPGJO60vhF1uh2D3ZOwgVgm0IeAHgogUy3cjkiSfcX2Nj88yWtG1_LQILqwLA-ko6GY-'),
-                    fit: BoxFit.cover,
-                  ),
+                  image: photoUrl != null
+                      ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover)
+                      : null,
+                  color: colorScheme.surfaceContainerHigh,
                   border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
                 ),
+                child: photoUrl == null
+                    ? Icon(Icons.person, color: colorScheme.onSurfaceVariant)
+                    : null,
               ),
               const SizedBox(width: 12),
-              Text('LMS Academy', style: AppTextStyles.headlineMedium.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
+              Text('Acadify LMS', style: AppTextStyles.headlineMedium.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
               const Spacer(),
               Icon(Icons.notifications_outlined, color: colorScheme.onSurfaceVariant),
             ],
@@ -97,12 +207,12 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: 'Algorithmique L2',
+              value: _selectedCourseId,
               isExpanded: true,
               dropdownColor: colorScheme.surface,
               style: TextStyle(color: colorScheme.onSurface),
-              items: ['Algorithmique L2', 'Structures de Données L2', 'Base de Données L3'].map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
-              onChanged: (v) {},
+              items: _courses.map((course) => DropdownMenuItem(value: course.id, child: Text(course.name))).toList(),
+              onChanged: (v) => setState(() => _selectedCourseId = v),
             ),
           ),
         ),
@@ -131,9 +241,11 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [_buildLabel(context, 'Titre du document'), Text('0 / 80', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant))],
+          children: [_buildLabel(context, 'Titre du document'), Text('${_titleController.text.length} / 80', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant))],
         ),
         TextField(
+          controller: _titleController,
+          onChanged: (v) => setState(() {}),
           style: TextStyle(color: colorScheme.onSurface),
           decoration: InputDecoration(
             hintText: 'Entrez le titre du support...',
@@ -146,22 +258,33 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
         ),
         const SizedBox(height: 24),
         _buildLabel(context, 'Fichier'),
-        Container(
-          width: double.infinity,
-          height: 160,
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1), style: BorderStyle.solid),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.cloud_upload_outlined, size: 48, color: colorScheme.primary),
-              const SizedBox(height: 12),
-              Text('Appuyez pour sélectionner un fichier', style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurface)),
-              Text('(PDF or DOCX · Max 20 Mo)', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
-            ],
+        GestureDetector(
+          onTap: _pickFile,
+          child: Container(
+            width: double.infinity,
+            height: 160,
+            decoration: BoxDecoration(
+              color: colorScheme.surface.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1), style: BorderStyle.solid),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _selectedFile != null ? Icons.check_circle : Icons.cloud_upload_outlined,
+                  size: 48,
+                  color: _selectedFile != null ? Colors.green : colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _selectedFile != null ? _selectedFile!.path.split('/').last : 'Appuyez pour sélectionner un fichier',
+                  style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurface),
+                  textAlign: TextAlign.center,
+                ),
+                Text('(PDF or DOCX · Max 20 Mo)', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 24),
@@ -210,7 +333,7 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton(
-          onPressed: () {},
+          onPressed: _isUploading ? null : _handleUpload,
           style: ElevatedButton.styleFrom(
             backgroundColor: colorScheme.primary,
             foregroundColor: colorScheme.onPrimary,

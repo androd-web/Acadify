@@ -57,7 +57,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               ),
             ),
           ),
-          _buildBottomNavBar(context),
         ],
       ),
     );
@@ -288,56 +287,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Positioned(
-      bottom: 20,
-      left: 20,
-      right: 20,
-      child: Container(
-        height: 72,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(40),
-          border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20)],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildBottomNavItem(context, Icons.home, 'Accueil', true, () => context.go('/student-dashboard')),
-            _buildBottomNavItem(context, Icons.menu_book, 'Cours', false, () => context.push('/courses')),
-            _buildBottomNavItem(context, Icons.grade, 'Notes', false, () => context.push('/grades')),
-            _buildBottomNavItem(context, Icons.calendar_month, 'Planning', false, () => context.push('/schedule')),
-            _buildBottomNavItem(context, Icons.person, 'Profil', false, () => context.push('/profile')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavItem(BuildContext context, IconData icon, String label, bool isActive, VoidCallback onTap) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: isActive ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8) : null,
-        decoration: isActive ? BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(20)) : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: isActive ? Colors.white : colorScheme.onSurfaceVariant, size: 24),
-            if (isActive) ...[
-              const SizedBox(width: 8),
-              Text(label, style: theme.textTheme.labelMedium?.copyWith(color: Colors.white)),
-            ],
           ],
         ),
       ),

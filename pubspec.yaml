@@ -41,12 +41,16 @@ dependencies:
   firebase_core: ^4.9.0
   firebase_auth: ^6.5.1
   cloud_firestore: ^6.4.1
-  firebase_storage: ^13.4.1
+  firebase_storage: ^13.4.2
   firebase_messaging: ^16.2.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   path_provider: ^2.1.5
   shared_preferences: ^2.5.5
+  dio: ^5.9.2
+  flutter_pdfview: ^1.4.4
+  image_picker: ^1.2.2
+  file_picker: ^11.0.2
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/constants/app_assets.dart';
 
@@ -13,6 +14,14 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+
+  void _finishOnboarding() async {
+    var prefsBox = Hive.box('prefsBox');
+    await prefsBox.put('onboarding_done', true);
+    if (mounted) {
+      context.go('/login');
+    }
+  }
 
   final List<Map<String, dynamic>> _slides = [
     {
@@ -81,7 +90,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       else
                         const SizedBox(width: 48),
                       TextButton(
-                        onPressed: () => context.go('/login'),
+                        onPressed: _finishOnboarding,
                         child: Text(
                           'PASSER',
                           style: AppTextStyles.labelMedium.copyWith(
@@ -206,7 +215,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 curve: Curves.easeIn,
                               );
                             } else {
-                              context.go('/login');
+                              _finishOnboarding();
                             }
                           },
                           style: ElevatedButton.styleFrom(

@@ -1,10 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/course_service.dart';
+import '../../../core/models/course_model.dart';
 
-class TeacherCoursesScreen extends StatelessWidget {
+class TeacherCoursesScreen extends StatefulWidget {
   const TeacherCoursesScreen({super.key});
+
+  @override
+  State<TeacherCoursesScreen> createState() => _TeacherCoursesScreenState();
+}
+
+class _TeacherCoursesScreenState extends State<TeacherCoursesScreen> {
+  final CourseService _courseService = CourseService();
+  final Box _userBox = Hive.box('userBox');
+  
+  List<CourseModel> _courses = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCourses();
+  }
+
+  Future<void> _loadCourses() async {
+    final String? uid = _userBox.get('uid');
+    if (uid != null) {
+      final courses = await _courseService.getTeacherCourses(uid);
+      if (mounted) {
+        setState(() {
+          _courses = courses;
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,25 +49,33 @@ class TeacherCoursesScreen extends StatelessWidget {
           _buildAppBar(context),
           Positioned.fill(
             top: 80,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Gérez vos matières et ressources pédagogiques',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildStatsOverview(context),
-                  const SizedBox(height: 32),
-                  _buildSearchAndFilters(context),
-                  const SizedBox(height: 24),
-                  _buildCourseCards(context),
-                  const SizedBox(height: 32),
-                  _buildRecentResources(context),
-                  const SizedBox(height: 120),
-                ],
+            child: RefreshIndicator(
+              onRefresh: _loadCourses,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Gérez vos matières et ressources pédagogiques',
+                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildStatsOverview(context),
+                    const SizedBox(height: 32),
+                    _buildSearchAndFilters(context),
+                    const SizedBox(height: 24),
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_courses.isEmpty)
+                      const Center(child: Padding(padding: EdgeInsets.all(40), child: Text('Aucun cours trouvé.')))
+                    else
+                      _buildCourseCards(context),
+                    const SizedBox(height: 32),
+                    _buildRecentResources(context),
+                    const SizedBox(height: 120),
+                  ],
+                ),
               ),
             ),
           ),
@@ -46,6 +87,7 @@ class TeacherCoursesScreen extends StatelessWidget {
   }
 
   Widget _buildAppBar(BuildContext context) {
+    final String? photoUrl = _userBox.get('photoUrl');
     return Positioned(
       top: 0,
       left: 0,
@@ -77,11 +119,12 @@ class TeacherCoursesScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                  image: const DecorationImage(
-                    image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuAuQbVpF0Mlj2w3epD9tn5WBuaTQ1j5-ffTShfaqzgw1KABAK5F99vgXGWPm54cBMG1n79_XEl4T2OW26hWBCERzSHKijAkh0r5Dz2rejMnOsPI4hPmJH2MUf4o-N_qCPHocHXqmhK541jPxXp47UgPgNcAaHt5kSnayssWieMVvR3fMdx_ofyS0oC_JWQJx5JO-EhUvV7zm4qM-Exhm0Gn7JxLDFCRADXXULBXU82A8-wPB3HI80wWEOONx3FzZhN72mSLxY2CuiF3'),
-                    fit: BoxFit.cover,
-                  ),
+                  image: photoUrl != null
+                      ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover)
+                      : null,
+                  color: AppColors.surfaceContainerHigh,
                 ),
+                child: photoUrl == null ? const Icon(Icons.person, size: 16) : null,
               ),
             ],
           ),
@@ -99,10 +142,10 @@ class TeacherCoursesScreen extends StatelessWidget {
       crossAxisSpacing: 16,
       childAspectRatio: 1.5,
       children: [
-        _buildStatItem(context, Icons.menu_book, '12', 'Total Cours', AppColors.secondary),
-        _buildStatItem(context, Icons.description, '148', 'Documents', AppColors.primary),
-        _buildStatItem(context, Icons.group, '420', 'Étudiants', AppColors.amber),
-        _buildStatItem(context, Icons.assignment_turned_in, '8', 'Évaluations', AppColors.error),
+        _buildStatItem(context, Icons.menu_book, '${_courses.length}', 'Total Cours', AppColors.secondary),
+        _buildStatItem(context, Icons.description, '-', 'Documents', AppColors.primary),
+        _buildStatItem(context, Icons.group, '-', 'Étudiants', AppColors.amber),
+        _buildStatItem(context, Icons.assignment_turned_in, '-', 'Évaluations', AppColors.error),
       ],
     );
   }
@@ -184,44 +227,19 @@ class TeacherCoursesScreen extends StatelessWidget {
 
   Widget _buildCourseCards(BuildContext context) {
     return Column(
-      children: [
-        _buildCourseCard(
+      children: _courses.map((course) => Padding(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: _buildCourseCard(
           context: context,
-          tag: 'Synchronisé',
-          code: 'INF-401',
-          title: 'Algorithmique & Structures de Données',
-          dept: 'Licence 3 - Génie Logiciel',
-          students: '124 Étudiants',
-          docs: '32 Documents',
-          lastActivity: 'Il y a 2 heures',
-          isOffline: false,
+          course: course,
         ),
-        const SizedBox(height: 24),
-        _buildCourseCard(
-          context: context,
-          tag: 'Hors ligne',
-          code: 'TEL-405',
-          title: 'Réseaux Mobiles & 5G Architectures',
-          dept: 'Master 1 - Télécoms',
-          students: '86 Étudiants',
-          docs: '18 Documents',
-          lastActivity: 'Hier',
-          isOffline: true,
-        ),
-      ],
+      )).toList(),
     );
   }
 
   Widget _buildCourseCard({
     required BuildContext context,
-    required String tag,
-    required String code,
-    required String title,
-    required String dept,
-    required String students,
-    required String docs,
-    required String lastActivity,
-    required bool isOffline,
+    required CourseModel course,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -245,11 +263,11 @@ class TeacherCoursesScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isOffline ? AppColors.amber.withValues(alpha: 0.2) : AppColors.primaryContainer.withValues(alpha: 0.3),
+                            color: AppColors.primaryContainer.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: isOffline ? AppColors.amber.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.2)),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                           ),
-                          child: Text(tag.toUpperCase(), style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: isOffline ? AppColors.amber : AppColors.primary, fontWeight: FontWeight.bold)),
+                          child: Text('ACTIF', style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 8),
                         Container(
@@ -259,7 +277,7 @@ class TeacherCoursesScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
                           ),
-                          child: Text(code, style: AppTextStyles.labelSmall.copyWith(fontSize: 10, fontWeight: FontWeight.bold)),
+                          child: Text(course.filiere, style: AppTextStyles.labelSmall.copyWith(fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -267,19 +285,17 @@ class TeacherCoursesScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text(title, style: AppTextStyles.headlineMedium.copyWith(fontSize: 22)),
+                Text(course.name, style: AppTextStyles.headlineMedium.copyWith(fontSize: 22)),
                 const SizedBox(height: 16),
-                _buildCourseInfoItem(Icons.school, dept),
-                _buildCourseInfoItem(Icons.group, students),
-                _buildCourseInfoItem(Icons.description, docs),
+                _buildCourseInfoItem(Icons.school, '${course.filiere} - ${course.niveau}'),
+                _buildCourseInfoItem(Icons.calendar_today, 'Semestre ${course.semester}'),
                 const SizedBox(height: 16),
                 Divider(color: colorScheme.onSurface.withValues(alpha: 0.1)),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Dernière activité: $lastActivity', style: AppTextStyles.labelMedium.copyWith(color: AppColors.outline, fontStyle: FontStyle.italic)),
-                    _buildStudentAvatars(context),
+                    Text('Mis à jour: ${course.updatedAt.day}/${course.updatedAt.month}', style: AppTextStyles.labelMedium.copyWith(color: AppColors.outline, fontStyle: FontStyle.italic)),
                   ],
                 ),
               ],
@@ -292,8 +308,8 @@ class TeacherCoursesScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                _buildCourseAction(context, Icons.add_box, 'Document', () {}),
-                _buildCourseAction(context, Icons.visibility, 'Étudiants', () {}),
+                _buildCourseAction(context, Icons.add_box, 'Document', () => context.push('/teacher-upload-course')),
+                _buildCourseAction(context, Icons.visibility, 'Appel', () => context.push('/teacher-attendance')),
                 _buildCourseAction(context, Icons.rate_review, 'Notes', () => context.push('/teacher-grade-entry')),
               ],
             ),
@@ -312,40 +328,6 @@ class TeacherCoursesScreen extends StatelessWidget {
           const SizedBox(width: 8),
           Text(text, style: AppTextStyles.bodySmall.copyWith(color: AppColors.onSurfaceVariant)),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStudentAvatars(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            shape: BoxShape.circle,
-            border: Border.all(color: colorScheme.surfaceContainerLow, width: 2),
-          ),
-          child: const Center(child: Text('+121', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold))),
-        ),
-        _buildMiniAvatar(context, 'https://lh3.googleusercontent.com/aida-public/AB6AXuB6hMMfAjR5UmlqO0DBQysTWZrmer_mu6qDezBGf8vEt4FZxpaH0GaFt1GEZq3BkhJpxm9q60gPWZsC0zJCXGx48fI9DEHIgD563XPpDil4A0m0EO57eUNablF6QU6EYpFKDTPa8ihmIFKHJPSbWRFp6I01SjKJ1FXrImVfZ3UJRlsAQYAJTxsixYIoB9sjtH-OadI5ekVL4omTPdl3tp49_PQtl9Az01BeC-9YjuqsiwXvWmz_HE7KUsXDwYULTzqu6g5RbNjFHMoN'),
-        _buildMiniAvatar(context, 'https://lh3.googleusercontent.com/aida-public/AB6AXuCVr9erNdIao_dlXB6MPLtMb4hUiapRVXgqV9mZxoE316UYCLKpfZpDkRCubjV0nCo86xsRPXuu8zGE1EyhaFdK_UWkHJ80sRnWnsvBvWhB3HtgdYfHoGgwERIHgoE4dgAL-7GcLJ8V0BViD-v0ZpTKy8Mp7o8RwcIKhKTDoO_dewVVsKm6qhdaeTap91AH_mTSWH3zfzltjLaV4CUY2M0rKb09wwwKObHiysGWNadpHMqLLizn2XcgRhe7ErnW4tVlBeyHPuJvhkwp'),
-      ].reversed.toList(),
-    );
-  }
-
-  Widget _buildMiniAvatar(BuildContext context, String url) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 24,
-      height: 24,
-      margin: const EdgeInsets.only(right: -8),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: colorScheme.surfaceContainerLow, width: 2),
-        image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
       ),
     );
   }
@@ -383,11 +365,7 @@ class TeacherCoursesScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        _buildResourceItem(context, Icons.picture_as_pdf, 'TD_Arbres_Binaires.pdf', 'Algorithmique', 'Ajouté hier', AppColors.error),
-        const SizedBox(height: 12),
-        _buildResourceItem(context, Icons.description, 'Exam_Final_Architecture.docx', 'Architecture', 'Il y a 3 jours', AppColors.secondary),
-        const SizedBox(height: 12),
-        _buildResourceItem(context, Icons.slideshow, 'Lecture_5G_NR.pptx', 'Réseaux Mobiles', 'Il y a 1 semaine', AppColors.primary),
+        _buildResourceItem(context, Icons.picture_as_pdf, 'Document_Exemple.pdf', 'Matière', 'Aujourd\'hui', AppColors.error),
       ],
     );
   }
@@ -440,21 +418,24 @@ class TeacherCoursesScreen extends StatelessWidget {
     return Positioned(
       bottom: 100,
       right: 20,
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: AppColors.amber,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.amber.withValues(alpha: 0.3),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
-          ],
+      child: GestureDetector(
+        onTap: () => context.push('/teacher-upload-course'),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: AppColors.amber,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.amber.withValues(alpha: 0.3),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add, color: Colors.black, size: 32),
         ),
-        child: const Icon(Icons.add, color: Colors.black, size: 32),
       ),
     );
   }
@@ -475,11 +456,9 @@ class TeacherCoursesScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildBottomNavItem(context, Icons.dashboard, 'Dashboard', false, () => context.push('/teacher-dashboard')),
+            _buildBottomNavItem(context, Icons.dashboard, 'Dashboard', false, () => context.go('/teacher-dashboard')),
             _buildBottomNavItem(context, Icons.menu_book, 'Courses', true, () {}),
-            _buildBottomNavItem(context, Icons.group, 'Students', false, () {}),
-            _buildBottomNavItem(context, Icons.calendar_today, 'Planning', false, () {}),
-            _buildBottomNavItem(context, Icons.person, 'Profile', false, () {}),
+            _buildBottomNavItem(context, Icons.person, 'Profile', false, () => context.push('/teacher-profile')),
           ],
         ),
       ),
@@ -520,3 +499,4 @@ class TeacherCoursesScreen extends StatelessWidget {
     );
   }
 }
+

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "391253135490",
+    "project_id": "acadify-uiecc",
+    "storage_bucket": "acadify-uiecc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:391253135490:android:ec59f6097f4828c73ce49b",
+        "android_client_info": {
+          "package_name": "com.codify.acadify"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdexJAlEUPk_u2tdnjGYfUN92_8E20gLk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

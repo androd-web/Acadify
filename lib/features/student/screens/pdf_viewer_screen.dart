@@ -1,10 +1,46 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_pdfview/flutter_pdfview.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/file_service.dart';
 
-class PdfViewerScreen extends StatelessWidget {
-  const PdfViewerScreen({super.key});
+class PdfViewerScreen extends StatefulWidget {
+  final Map<String, dynamic> doc;
+  const PdfViewerScreen({super.key, required this.doc});
+
+  @override
+  State<PdfViewerScreen> createState() => _PdfViewerScreenState();
+}
+
+class _PdfViewerScreenState extends State<PdfViewerScreen> {
+  final FileService _fileService = FileService();
+  String? _localPath;
+  bool _isLoading = true;
+  int _totalPages = 0;
+  int _currentPage = 0;
+  bool _isReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _preparePdf();
+  }
+
+  Future<void> _preparePdf() async {
+    final path = _fileService.getLocalPath(widget.doc['id']);
+    if (path != null && await File(path).exists()) {
+      setState(() {
+        _localPath = path;
+        _isLoading = false;
+      });
+    } else {
+      // Pour la Phase 1, on force le téléchargement avant lecture
+      // ou on utilise un viewer réseau. Ici on va informer l'utilisateur.
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,123 +53,58 @@ class PdfViewerScreen extends StatelessWidget {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'Cours_Algorithmique_S1.pdf',
+          widget.doc['title'] ?? 'Document',
           style: AppTextStyles.headlineMedium.copyWith(fontSize: 16),
           overflow: TextOverflow.ellipsis,
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download, color: AppColors.onSurfaceVariant),
-            onPressed: () {},
-          ),
-        ],
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildSimulatedPdfPage(),
-                const SizedBox(height: 120),
-              ],
-            ),
-          ),
-          _buildOfflineBadge(),
-          _buildPageIndicator(),
-          _buildBottomNavBar(),
-        ],
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _localPath != null
+              ? Stack(
+                  children: [
+                    PDFView(
+                      filePath: _localPath,
+                      enableSwipe: true,
+                      swipeHorizontal: true,
+                      autoSpacing: false,
+                      pageFling: true,
+                      onRender: (pages) => setState(() {
+                        _totalPages = pages!;
+                        _isReady = true;
+                      }),
+                      onViewCreated: (PDFViewController controller) {},
+                      onPageChanged: (page, total) => setState(() => _currentPage = page!),
+                    ),
+                    if (!_isReady) const Center(child: CircularProgressIndicator()),
+                    _buildPageIndicator(),
+                  ],
+                )
+              : _buildNotDownloadedState(),
     );
   }
 
-  Widget _buildSimulatedPdfPage() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10)),
-        ],
-      ),
-      padding: const EdgeInsets.all(24),
+  Widget _buildNotDownloadedState() {
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Université Internationale', style: TextStyle(color: Colors.grey[600], fontSize: 10)),
-              Text('2023-2024', style: TextStyle(color: Colors.grey[600], fontSize: 10)),
-            ],
-          ),
-          const Divider(height: 32),
-          const Text(
-            'Chapitre 3: Structures de Données Avancées',
-            style: TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Dans ce chapitre, nous aborderons les structures de données complexes essentielles pour l\'optimisation des algorithmes. La maîtrise de ces concepts est fondamentale pour le développement logiciel performant.',
-            style: TextStyle(color: Color(0xFF333333), fontSize: 14, height: 1.5),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            '3.1 Arbres Binaires de Recherche (ABR)',
-            style: TextStyle(color: Color(0xFF0B6E4F), fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          const Icon(Icons.cloud_off, size: 64, color: AppColors.onSurfaceVariant),
           const SizedBox(height: 16),
-          const Text(
-            'Un arbre binaire de recherche est une structure de données arborescente où chaque nœud possède au maximum deux enfants. Pour tout nœud, les valeurs du sous-arbre gauche sont inférieures, et celles du sous-arbre droit sont supérieures.',
-            style: TextStyle(color: Color(0xFF333333), fontSize: 14, height: 1.5),
-          ),
+          const Text('Veuillez télécharger le document pour le lire.'),
           const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: const Text(
-              'struct Noeud {\n    int valeur;\n    Noeud* gauche;\n    Noeud* droite;\n};',
-              style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: Color(0xFF444444)),
-            ),
+          ElevatedButton(
+            onPressed: () => context.pop(),
+            child: const Text('Retour aux documents'),
           ),
-          const SizedBox(height: 40),
-          Center(child: Text('Page 3', style: TextStyle(color: Colors.grey[500], fontSize: 12))),
         ],
-      ),
-    );
-  }
-
-  Widget _buildOfflineBadge() {
-    return Positioned(
-      top: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.primaryContainer.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.cloud_done, color: AppColors.primary, size: 14),
-            const SizedBox(width: 4),
-            Text('Offline', style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold)),
-          ],
-        ),
       ),
     );
   }
 
   Widget _buildPageIndicator() {
     return Positioned(
-      bottom: 100,
+      bottom: 20,
       left: 0,
       right: 0,
       child: Center(
@@ -144,37 +115,10 @@ class PdfViewerScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: Colors.white10),
           ),
-          child: Text('Page 3 sur 42', style: AppTextStyles.labelSmall),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavBar() {
-    return Positioned(
-      bottom: 20,
-      left: 20,
-      right: 20,
-      child: Container(
-        height: 64,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerHigh.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.white10),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 20),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            IconButton(icon: const Icon(Icons.first_page, color: AppColors.onSurfaceVariant), onPressed: () {}),
-            IconButton(icon: const Icon(Icons.search, color: AppColors.onSurfaceVariant), onPressed: () {}),
-            IconButton(icon: const Icon(Icons.bookmark_outline, color: AppColors.onSurfaceVariant), onPressed: () {}),
-            IconButton(icon: const Icon(Icons.last_page, color: AppColors.onSurfaceVariant), onPressed: () {}),
-          ],
+          child: Text('Page ${_currentPage + 1} sur $_totalPages', style: AppTextStyles.labelSmall),
         ),
       ),
     );
   }
 }
+

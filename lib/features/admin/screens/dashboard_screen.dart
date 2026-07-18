@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../shared/widgets/custom_navigation_bar.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -36,16 +35,6 @@ class AdminDashboard extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-          CustomNavigationBar(
-            currentIndex: 0,
-            items: [
-              CustomBottomNavItem(icon: Icons.dashboard, label: 'Dashboard', onTap: () {}),
-              CustomBottomNavItem(icon: Icons.group, label: 'Utilisateurs', onTap: () {}),
-              CustomBottomNavItem(icon: Icons.campaign, label: 'Alertes', onTap: () {}),
-              CustomBottomNavItem(icon: Icons.description, label: 'Docs', onTap: () {}),
-              CustomBottomNavItem(icon: Icons.settings, label: 'Paramètres', onTap: () {}),
-            ],
           ),
         ],
       ),

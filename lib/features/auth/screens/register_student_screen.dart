@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/models/user_model.dart';
+import '../../../core/utils/validators.dart';
 
 class RegisterStudentScreen extends StatefulWidget {
   const RegisterStudentScreen({super.key});
@@ -11,15 +14,17 @@ class RegisterStudentScreen extends StatefulWidget {
 }
 
 class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _nomController = TextEditingController();
   final _prenomController = TextEditingController();
-  final _matriculeController = TextEditingController();
   final _emailController = TextEditingController();
+  final _matriculeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authService = AuthService();
   
   bool _obscurePassword = true;
-  String? _selectedSex;
+  bool _isLoading = false;
   String? _selectedFiliere;
   String? _selectedPromotion;
 
@@ -27,11 +32,53 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
   void dispose() {
     _nomController.dispose();
     _prenomController.dispose();
-    _matriculeController.dispose();
     _emailController.dispose();
+    _matriculeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _handleRegister() async {
+    if (_formKey.currentState!.validate()) {
+      if (_selectedFiliere == null || _selectedPromotion == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Veuillez remplir tous les champs.')),
+        );
+        return;
+      }
+
+      if (_passwordController.text != _confirmPasswordController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Les mots de passe ne correspondent pas.')),
+        );
+        return;
+      }
+
+      setState(() => _isLoading = true);
+      try {
+        UserModel? user = await _authService.registerStudent(
+          name: "${_nomController.text.trim()} ${_prenomController.text.trim()}",
+          email: _emailController.text.trim(),
+          matricule: _matriculeController.text.trim(),
+          filiere: _selectedFiliere!,
+          niveau: _selectedPromotion!,
+          password: _passwordController.text,
+        );
+
+        if (user != null && mounted) {
+          context.go('/student-dashboard');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur : ${e.toString()}')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -52,16 +99,19 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            _buildProgressBar(),
-            const SizedBox(height: 32),
-            _buildForm(),
-            const SizedBox(height: 40),
-            _buildSubmitButton(),
-            const SizedBox(height: 40),
-          ],
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              _buildProgressBar(),
+              const SizedBox(height: 32),
+              _buildForm(),
+              const SizedBox(height: 40),
+              _buildSubmitButton(),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -81,7 +131,7 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Text('Étape 1 sur 1', style: AppTextStyles.labelMedium.copyWith(color: AppColors.onSurfaceVariant)),
+        Text('Étape unique', style: AppTextStyles.labelMedium.copyWith(color: AppColors.onSurfaceVariant)),
       ],
     );
   }
@@ -90,19 +140,17 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildTextField('NOM', 'Votre nom', _nomController),
+        _buildTextField('NOM', 'Votre nom', _nomController, Icons.person_outline),
         const SizedBox(height: 24),
-        _buildTextField('PRÉNOM', 'Votre prénom', _prenomController),
+        _buildTextField('PRÉNOM', 'Votre prénom', _prenomController, Icons.person_outline),
         const SizedBox(height: 24),
-        _buildTextField('MATRICULE', 'Ex: 24ABC123', _matriculeController),
+        _buildTextField('EMAIL', 'votre@email.com', _emailController, Icons.email_outlined, validator: Validators.validateEmail),
         const SizedBox(height: 24),
-        _buildTextField('ADRESSE EMAIL', 'votre@email.com', _emailController),
+        _buildTextField('MATRICULE', 'Ex: 24ABC123', _matriculeController, Icons.badge_outlined),
         const SizedBox(height: 24),
-        _buildSexSelector(),
+        _buildDropdown('FILIÈRE', 'Sélectionner une filière', ['ISN', 'CDN', 'INS'], _selectedFiliere, (v) => setState(() => _selectedFiliere = v), Icons.school_outlined),
         const SizedBox(height: 24),
-        _buildDropdown('FILIÈRE', 'Sélectionner une filière', ['ISN', 'CDN', 'INS'], _selectedFiliere, (v) => setState(() => _selectedFiliere = v)),
-        const SizedBox(height: 24),
-        _buildDropdown('PROMOTION', 'Sélectionner un niveau', ['L1', 'L2', 'L3', 'M1', 'M2'], _selectedPromotion, (v) => setState(() => _selectedPromotion = v)),
+        _buildDropdown('PROMOTION', 'Sélectionner un niveau', ['L1', 'L2', 'L3', 'M1', 'M2'], _selectedPromotion, (v) => setState(() => _selectedPromotion = v), Icons.trending_up_outlined),
         const SizedBox(height: 24),
         _buildPasswordField('MOT DE PASSE', 'Créer un mot de passe', _passwordController),
         const SizedBox(height: 24),
@@ -111,16 +159,18 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
     );
   }
 
-  Widget _buildTextField(String label, String hint, TextEditingController controller) {
+  Widget _buildTextField(String label, String hint, TextEditingController controller, IconData icon, {String? Function(String?)? validator}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.onSurface, letterSpacing: 1.5)),
         const SizedBox(height: 8),
-        TextField(
+        TextFormField(
           controller: controller,
+          validator: validator ?? (value) => value == null || value.isEmpty ? 'Champ requis' : null,
           decoration: InputDecoration(
             hintText: hint,
+            prefixIcon: Icon(icon, size: 20, color: AppColors.onSurfaceVariant),
             hintStyle: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.5)),
             filled: true,
             fillColor: AppColors.background,
@@ -133,57 +183,7 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
     );
   }
 
-  Widget _buildSexSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('SEXE', style: AppTextStyles.labelSmall.copyWith(color: AppColors.onSurface, letterSpacing: 1.5)),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedSex,
-              hint: Text('Sélectionner votre sexe', style: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.5), fontSize: 14)),
-              isExpanded: true,
-              dropdownColor: AppColors.surface,
-              icon: const Icon(Icons.expand_more, color: AppColors.onSurfaceVariant),
-              items: [
-                DropdownMenuItem(
-                  value: 'M',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.male, color: Colors.blue, size: 20),
-                      const SizedBox(width: 12),
-                      Text('M', style: AppTextStyles.bodyMedium),
-                    ],
-                  ),
-                ),
-                DropdownMenuItem(
-                  value: 'F',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.female, color: Colors.pink, size: 20),
-                      const SizedBox(width: 12),
-                      Text('F', style: AppTextStyles.bodyMedium),
-                    ],
-                  ),
-                ),
-              ],
-              onChanged: (v) => setState(() => _selectedSex = v),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDropdown(String label, String hint, List<String> options, String? value, ValueChanged<String?> onChanged) {
+  Widget _buildDropdown(String label, String hint, List<String> options, String? value, ValueChanged<String?> onChanged, IconData icon) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -196,16 +196,24 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white10),
           ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              hint: Text(hint, style: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.5), fontSize: 14)),
-              isExpanded: true,
-              dropdownColor: AppColors.surface,
-              icon: const Icon(Icons.expand_more, color: AppColors.onSurfaceVariant),
-              items: options.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
-              onChanged: onChanged,
-            ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: AppColors.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: value,
+                    hint: Text(hint, style: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.5), fontSize: 14)),
+                    isExpanded: true,
+                    dropdownColor: AppColors.surface,
+                    icon: const Icon(Icons.expand_more, color: AppColors.onSurfaceVariant),
+                    items: options.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -218,11 +226,13 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
       children: [
         Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.onSurface, letterSpacing: 1.5)),
         const SizedBox(height: 8),
-        TextField(
+        TextFormField(
           controller: controller,
           obscureText: _obscurePassword,
+          validator: (value) => value == null || value.length < 6 ? 'Minimum 6 caractères' : null,
           decoration: InputDecoration(
             hintText: hint,
+            prefixIcon: const Icon(Icons.lock_outline, size: 20, color: AppColors.onSurfaceVariant),
             hintStyle: TextStyle(color: AppColors.onSurfaceVariant.withValues(alpha: 0.5)),
             filled: true,
             fillColor: AppColors.background,
@@ -243,7 +253,7 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: () => context.go('/student-dashboard'),
+        onPressed: _isLoading ? null : _handleRegister,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primaryContainer,
           foregroundColor: Colors.white,
@@ -252,14 +262,16 @@ class _RegisterStudentScreenState extends State<RegisterStudentScreen> {
           elevation: 10,
           shadowColor: AppColors.primaryContainer.withValues(alpha: 0.2),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Créer mon compte', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward, size: 18),
-          ],
-        ),
+        child: _isLoading 
+          ? const CircularProgressIndicator(color: Colors.white)
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Créer mon compte', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward, size: 18),
+              ],
+            ),
       ),
     );
   }

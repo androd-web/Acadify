@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/models/user_model.dart';
 
 class RegisterAdminScreen extends StatefulWidget {
   const RegisterAdminScreen({super.key});
@@ -21,8 +23,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
   final _adminCodeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authService = AuthService();
   
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -66,7 +70,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
               TextFormField(
                 controller: _nomController,
                 style: AppTextStyles.bodyMedium,
-                decoration: const InputDecoration(hintText: 'Saisissez votre nom'),
+                decoration: const InputDecoration(
+                  hintText: 'Saisissez votre nom',
+                  prefixIcon: Icon(Icons.person_outline, size: 20),
+                ),
                 validator: (v) => v!.isEmpty ? 'Requis' : null,
               ),
               const SizedBox(height: 20),
@@ -76,7 +83,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
               TextFormField(
                 controller: _prenomController,
                 style: AppTextStyles.bodyMedium,
-                decoration: const InputDecoration(hintText: 'Saisissez votre prénom'),
+                decoration: const InputDecoration(
+                  hintText: 'Saisissez votre prénom',
+                  prefixIcon: Icon(Icons.person_outline, size: 20),
+                ),
                 validator: (v) => v!.isEmpty ? 'Requis' : null,
               ),
               const SizedBox(height: 20),
@@ -87,7 +97,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                 controller: _emailController,
                 style: AppTextStyles.bodyMedium,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(hintText: 'votre@email.com'),
+                decoration: const InputDecoration(
+                  hintText: 'votre@email.com',
+                  prefixIcon: Icon(Icons.email_outlined, size: 20),
+                ),
                 validator: Validators.validateEmail,
               ),
               const SizedBox(height: 20),
@@ -97,7 +110,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
               TextFormField(
                 controller: _fonctionController,
                 style: AppTextStyles.bodyMedium,
-                decoration: const InputDecoration(hintText: 'ex: Scolarité, Direction'),
+                decoration: const InputDecoration(
+                  hintText: 'ex: Scolarité, Direction',
+                  prefixIcon: Icon(Icons.work_outline, size: 20),
+                ),
                 validator: (v) => v!.isEmpty ? 'Requis' : null,
               ),
               
@@ -154,6 +170,7 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                       style: AppTextStyles.bodyMedium,
                       decoration: InputDecoration(
                         hintText: '••••••••',
+                        prefixIcon: const Icon(Icons.vpn_key_outlined, size: 20),
                         fillColor: AppColors.background,
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -180,6 +197,7 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                 style: AppTextStyles.bodyMedium,
                 decoration: InputDecoration(
                   hintText: 'Minimum 8 caractères',
+                  prefixIcon: const Icon(Icons.lock_outline, size: 20),
                   suffixIcon: IconButton(
                     icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, size: 20),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
@@ -195,7 +213,10 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
                 controller: _confirmPasswordController,
                 obscureText: true,
                 style: AppTextStyles.bodyMedium,
-                decoration: const InputDecoration(hintText: 'Ressaisissez le mot de passe'),
+                decoration: const InputDecoration(
+                  hintText: 'Ressaisissez le mot de passe',
+                  prefixIcon: Icon(Icons.lock_outline, size: 20),
+                ),
                 validator: (v) {
                   if (v!.isEmpty) return 'Requis';
                   if (v != _passwordController.text) return 'Les mots de passe ne correspondent pas';
@@ -204,15 +225,13 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
               ),
               
               const SizedBox(height: 48),
-              PrimaryButton(
-                text: 'Créer mon compte',
-                backgroundColor: AppColors.amber,
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    context.go('/admin-dashboard');
-                  }
-                },
-              ),
+              _isLoading 
+                ? const Center(child: CircularProgressIndicator(color: AppColors.amber))
+                : PrimaryButton(
+                    text: 'Créer mon compte',
+                    backgroundColor: AppColors.amber,
+                    onPressed: _handleRegister,
+                  ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -231,6 +250,47 @@ class _RegisterAdminScreenState extends State<RegisterAdminScreen> {
         ),
       ),
     );
+  }
+
+  void _handleRegister() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      try {
+        // 1. Vérifier le code secret admin
+        bool isCodeValid = await _authService.verifySecretCode('admin', _adminCodeController.text.trim());
+        if (!isCodeValid) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Code administrateur invalide.')),
+            );
+          }
+          return;
+        }
+
+        // 2. Inscription
+        UserModel? user = await _authService.registerAdmin(
+          name: "${_nomController.text.trim()} ${_prenomController.text.trim()}",
+          email: _emailController.text.trim(),
+          fonction: _fonctionController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        if (user != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Compte admin créé ! En attente de validation.')),
+          );
+          context.go('/login');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur : ${e.toString()}')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
   }
 
   Widget _buildLabel(String text) {

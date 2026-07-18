@@ -1,0 +1,997 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║           ACADIFY — LOGIQUE BACKEND COMPLÈTE · PHASE 1 · 38 ÉCRANS            ║
+║           Vision de l'application finale fonctionnelle à 100%                  ║
+║           Rédigé par : Claude · Pour : Androd · Codify · UIECC 2026           ║  ajouter la date de creation de chaque compte automatiquement
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARTIE 1 — VISION GLOBALE DE L'APPLICATION FINALE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Acadify est une application mobile Flutter avec un backend Firebase. Elle sert
+trois types d'utilisateurs : les étudiants, les enseignants et les administrateurs.
+Chacun a son propre espace, ses propres droits, et son propre tableau de bord.
+
+L'application est "offline-first" : elle fonctionne même sans connexion internet.
+Toutes les données consultées sont sauvegardées localement via Hive (une base de
+données locale Flutter). Quand la connexion revient, Hive se synchronise avec
+Firebase automatiquement, de façon silencieuse.
+
+
+LES SERVICES FIREBASE UTILISÉS
+────────────────────────────────
+  → Firebase Auth          : Gestion des comptes et des sessions
+  → Cloud Firestore        : Base de données principale (collections + documents)
+  → Firebase Storage       : Stockage des fichiers PDF et photos
+  → FCM (Cloud Messaging)  : Notifications push vers les téléphones
+  → Cloud Functions        : Actions serveur sécurisées (ex: créer un compte admin)
+  → Hive (local)           : Cache offline sur l'appareil de l'utilisateur
+
+
+STRUCTURE DE LA BASE FIRESTORE
+────────────────────────────────
+Voici toutes les collections Firestore que tu dois créer :
+
+  /users/{uid}
+      Champs : name, matricule, role (student/teacher/admin), filiere,
+               niveau, photoUrl, forcePasswordChange, status (active/pending),
+               subjects (liste pour les profs), createdAt
+
+  /announcements/{id}
+      Champs : title, body, category (urgent/info/general), targetGroup
+               (all/filiere_name/niveau), attachmentUrl, authorUid,
+               authorName, createdAt, status (published/archived)
+
+  /readStatus/{uid}/{announcementId}
+      Champs : readAt (timestamp de lecture)
+
+  /courses/{courseId}
+      Champs : name, teacherId, teacherName, filiere, semester (1 ou 2), updatedAt
+
+  /courses/{courseId}/documents/{docId}
+      Champs : title, type (cours/td/tp/examen), fileUrl, fileSize,
+               uploadedAt, uploadedBy
+
+  /grades/{uid}/subjects/{subjectId}
+      Champs : subjectName, teacherName, score, maxScore, coefficient,
+               comment, publishedAt, semester, evaluation (partiel1/ds/final)
+
+  /absences/{uid}/subjects/{subjectId}
+      Champs : subjectName, total, maxAllowed, records (liste de dates)
+
+  /schedule/{filiere}/{weekKey}
+      Champs : slots (liste de créneaux)
+      Chaque slot : subjectName, teacherId, teacherName, room,
+                    startTime, endTime, type, status (normal/cancelled/reported),
+                    cancelReason, newSlot
+
+  /directory/{uid}
+      Champs : name, role, subjects, photoUrl, email, office,
+               availability, filiere (si délégué)
+
+  /activityLogs/{logId}
+      Champs : action, actorUid, actorName, targetUid, details, timestamp
+
+  /config/systemStatus
+      Champs : firebaseOk, fcmOk, lastChecked
+
+  /config/absenceThreshold
+      Champs : maxAbsences (ex: 5 par matière)
+
+  /config/codes
+      Champs : teacher (code secret inscription enseignant), admin (code direction)
+
+  /passwordResets/{matricule}
+      Champs : requestedAt, handled (bool)
+
+
+RÈGLES DE SÉCURITÉ FIRESTORE (LOGIQUE)
+────────────────────────────────────────
+  → Un étudiant ne peut lire QUE ses propres grades et absences
+  → Un enseignant ne peut lire/écrire QUE les cours de ses matières
+  → Un admin peut tout lire et tout écrire
+  → Les communiqués sont lisibles par tous les utilisateurs connectés
+  → L'annuaire est lisible par tous les utilisateurs connectés
+  → Les logs d'activité sont lisibles uniquement par les admins
+  → /config/codes est lisible uniquement par les admins
+  → Personne ne peut modifier son propre rôle côté client
+
+
+NOTIFICATIONS FCM — TOPICS UTILISÉS
+─────────────────────────────────────
+  → topic "all"              : tous les utilisateurs
+  → topic "filiere_ISN"      : étudiants ISN
+  → topic "filiere_CDN"      : étudiants CDN
+  → topic "filiere_INS"      : étudiants INS
+  → topic "teachers"         : tous les enseignants
+  → topic "admin_registrations" : nouvelles inscriptions (admins)
+  → topic "admin_alerts"     : alertes système (admins)
+  → topic "student_{uid}"    : notification individuelle
+
+  À la connexion, chaque utilisateur s'abonne aux topics qui le concernent.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARTIE 2 — LOGIQUE BACKEND ÉCRAN PAR ÉCRAN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+════════════════════════════════════════
+GROUPE A — ÉCRANS TRANSVERSAUX (E01–E05)
+════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────
+E01 — SPLASH SCREEN
+──────────────────────────────────────────────────────────────────────────
+Rôle : Porte d'entrée. Prend la décision de routing principale.
+
+LOGIQUE :
+  1. Afficher logo + animation pendant 2 secondes minimum.
+  2. En parallèle, 3 vérifications silencieuses :
+       a. Hive : "onboarding_done" = true ?
+          Non → E02 (Onboarding)
+          Oui → continuer
+       b. Firebase Auth : session active ?
+          Non → E03 (Connexion)
+          Oui → continuer
+       c. Hive : quel rôle mémorisé ?
+          "student" → E06 Dashboard étudiant
+          "teacher" → E23 Dashboard enseignant
+          "admin"   → E28 Dashboard admin
+  3. Attendre les 2 secondes même si les vérifications finissent avant.
+
+DÉCISIONS :
+  → Lire le rôle depuis Hive, pas Firestore. Trop lent pour ce moment.
+  → Token expiré + pas d'internet → envoyer quand même au dashboard (mode offline).
+  → Hive sans rôle → aller à Connexion.
+
+DONNÉES LUES : Hive (onboarding_done, user_role), Firebase Auth (currentUser local)
+
+
+──────────────────────────────────────────────────────────────────────────
+E02 — ONBOARDING
+──────────────────────────────────────────────────────────────────────────
+Rôle : Présenter l'app une seule fois au premier lancement.
+
+LOGIQUE :
+  1. Afficher 3 slides. Boutons "Passer" et "Commencer".
+  2. Au clic sur "Commencer" ou "Passer" :
+       → Écrire dans Hive : "onboarding_done" = true
+       → Rediriger vers E03 (Connexion)
+
+DÉCISIONS :
+  → Zéro appel réseau. Tout est local.
+  → Écrire le flag AVANT de naviguer.
+
+DONNÉES ÉCRITES : Hive (onboarding_done = true)
+
+
+──────────────────────────────────────────────────────────────────────────
+E03 — CONNEXION
+──────────────────────────────────────────────────────────────────────────
+Rôle : Authentifier l'utilisateur et charger son profil.
+
+LOGIQUE :
+  1. L'utilisateur entre son matricule et mot de passe.
+  2. L'app formate l'email : matricule@uiecc.ac.cm
+  3. Firebase Auth : signInWithEmailAndPassword(email, password)
+  4. Si succès :
+       a. Lire /users/{uid} dans Firestore
+       b. Mémoriser dans Hive : uid, role, name, filiere, niveau
+       c. S'abonner aux topics FCM selon rôle + filière
+       d. Si forcePasswordChange = true → E05
+          Sinon → dashboard selon rôle
+  5. Gestion erreurs :
+       wrong-password → "Mot de passe incorrect"
+       user-not-found → "Matricule non reconnu"
+       network-error  → "Pas de connexion internet"
+       too-many-requests → "Trop de tentatives, réessaie plus tard"
+
+DÉCISIONS :
+  → Charger le profil Firestore AVANT de naviguer. Arriver au dashboard avec les données.
+  → Si Firestore échoue (offline) : utiliser Hive si disponible.
+  → Lien "S'inscrire" → E37. Lien "Mot de passe oublié" → E04.
+
+DONNÉES LUES : Firestore (/users/{uid})
+DONNÉES ÉCRITES : Hive (uid, role, name, filiere, niveau), FCM (subscribe)
+
+
+──────────────────────────────────────────────────────────────────────────
+E04 — MOT DE PASSE OUBLIÉ
+──────────────────────────────────────────────────────────────────────────
+Rôle : Permettre une demande de réinitialisation.
+
+LOGIQUE :
+  1. Saisir le matricule.
+  2. Écrire dans Firestore : /passwordResets/{matricule}
+     { requestedAt: now, handled: false }
+  3. Afficher : "Demande transmise. Présentez-vous au secrétariat."
+  4. Retour vers E03.
+
+DÉCISIONS :
+  → Ne pas utiliser Firebase "sendPasswordResetEmail" (pas de vraie adresse email).
+  → Ne pas confirmer si le matricule existe. Toujours afficher le même message.
+  → L'admin réinitialise manuellement depuis E31/E32.
+
+DONNÉES ÉCRITES : Firestore (/passwordResets/{matricule})
+
+
+──────────────────────────────────────────────────────────────────────────
+E05 — PREMIÈRE CONNEXION
+──────────────────────────────────────────────────────────────────────────
+Rôle : Forcer le changement du mot de passe provisoire.
+
+LOGIQUE :
+  1. S'affiche si forcePasswordChange = true dans Firestore.
+  2. Saisir nouveau mot de passe + confirmation (min 6 caractères).
+  3. Firebase Auth : updatePassword(newPassword)
+  4. Firestore : /users/{uid} → forcePasswordChange: false
+  5. Rediriger vers le dashboard selon le rôle.
+
+DÉCISIONS :
+  → L'utilisateur ne peut PAS passer cet écran. Il est bloqué ici.
+  → Si l'update Firebase échoue (réseau) : réessayer au prochain lancement
+    (le flag reste true).
+
+DONNÉES ÉCRITES : Firebase Auth (updatePassword), Firestore (forcePasswordChange: false)
+
+
+════════════════════════════════════════
+GROUPE B — ESPACE ÉTUDIANT (E06–E22)
+════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────
+E06 — DASHBOARD ÉTUDIANT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Page d'accueil centrale. Résumé de tout ce qui compte.
+
+LOGIQUE :
+  1. Charger en parallèle depuis Firestore (ou Hive si offline) :
+       → /schedule/{filiere}/semaine_actuelle → prochain cours du jour
+       → /announcements (limit 3, orderBy createdAt desc)
+       → /grades/{uid}/subjects (limit 3, orderBy publishedAt desc)
+       → /absences/{uid}/subjects → compteur total
+  2. Salutation personnalisée avec prénom depuis Hive.
+  3. Badge rouge absences si total > 70% du seuil maximum.
+  4. Mettre à jour le cache Hive avec les données fraîches.
+  5. Listener onSnapshot sur les communiqués pour les nouveaux en temps réel.
+
+DÉCISIONS :
+  → Offline : afficher données Hive avec bannière E21.
+  → "Prochain cours" = premier créneau du jour dont startTime > heure actuelle.
+  → Pas de rechargement automatique au retour sur l'écran. Pull-to-refresh suffit.
+
+DONNÉES LUES : Firestore (/schedule, /announcements, /grades/{uid}, /absences/{uid})
+
+
+──────────────────────────────────────────────────────────────────────────
+E07 — LISTE DES COMMUNIQUÉS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir tous les communiqués avec leur statut de lecture.
+
+LOGIQUE :
+  1. Lire /announcements (status = published, orderBy createdAt desc).
+  2. Pour chaque communiqué, vérifier dans Hive si l'ID est dans la liste "lus".
+     Point coloré si non lu.
+  3. Filtre par catégorie : côté client sur la liste en mémoire (pas de nouveau appel).
+  4. onSnapshot pour les nouveaux communiqués en temps réel.
+  5. Mettre en cache Hive.
+
+DÉCISIONS :
+  → Badge "non lu" calculé depuis Hive (liste des IDs lus). Pas d'appel Firestore.
+  → Les communiqués archivés ne s'affichent pas ici.
+
+DONNÉES LUES : Firestore (/announcements), Hive (IDs communiqués lus)
+
+
+──────────────────────────────────────────────────────────────────────────
+E08 — DÉTAIL D'UN COMMUNIQUÉ
+──────────────────────────────────────────────────────────────────────────
+Rôle : Lire un communiqué en entier.
+
+LOGIQUE :
+  1. Données déjà en mémoire depuis E07. Pas de nouvel appel Firestore.
+  2. À l'ouverture :
+       → Écrire /readStatus/{uid}/{announcementId} = { readAt: now }
+       → Mettre à jour Hive : ajouter l'ID à la liste des lus
+  3. Si pièce jointe : bouton "Télécharger PDF" → Storage.
+  4. Si offline et pièce jointe non téléchargée → bouton désactivé.
+
+DÉCISIONS :
+  → Marquer comme lu à l'OUVERTURE, pas à la fermeture.
+  → Offline + pièce jointe déjà téléchargée → ouvrir depuis le cache local.
+
+DONNÉES ÉCRITES : Firestore (/readStatus/{uid}/{id}), Hive (IDs lus)
+
+
+──────────────────────────────────────────────────────────────────────────
+E09 — BIBLIOTHÈQUE DE COURS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir toutes les matières du semestre.
+
+LOGIQUE :
+  1. Lire /courses filtré par filière + semestre.
+  2. Compter les documents dans /courses/{id}/documents pour chaque matière.
+  3. Badge "Nouveau" : comparer /courses/{id}.updatedAt avec Hive "lastSeen_{courseId}".
+  4. Indicateur offline : vérifier si des documents sont en Hive pour cette matière.
+  5. Charger les deux semestres dès le premier chargement (switch fluide).
+  6. Tap → E10. Au tap : écrire Hive lastSeen_{courseId} = now (cache badge).
+
+DONNÉES LUES : Firestore (/courses), Hive (lastSeen, documents téléchargés)
+
+
+──────────────────────────────────────────────────────────────────────────
+E10 — DOCUMENTS D'UNE MATIÈRE
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir et télécharger les documents d'une matière.
+
+LOGIQUE :
+  1. Lire /courses/{courseId}/documents (orderBy uploadedAt desc).
+  2. Pour chaque document, vérifier dans Hive si téléchargé → badge "Offline".
+  3. Bouton "Lire" → E11.
+  4. Bouton "Télécharger" :
+       → Télécharger depuis Storage.
+       → Barre de progression (Stream de bytes).
+       → Sauvegarder le fichier sur l'appareil.
+       → Écrire dans Hive : chemin local + docId + downloadedAt.
+       → Transformer en badge "Offline".
+
+DÉCISIONS :
+  → Refuser les fichiers > 20 Mo.
+  → Si téléchargement interrompu : reprendre ou supprimer le fichier partiel.
+
+DONNÉES LUES : Firestore (/courses/{courseId}/documents), Storage, Hive
+DONNÉES ÉCRITES : Hive (chemin local), Stockage appareil (fichier PDF)
+
+
+──────────────────────────────────────────────────────────────────────────
+E11 — VISIONNEUSE PDF
+──────────────────────────────────────────────────────────────────────────
+Rôle : Lire un document PDF dans l'app.
+
+LOGIQUE :
+  1. Si téléchargé (Hive) → ouvrir depuis chemin local. Zéro appel réseau.
+  2. Si non téléchargé et online → stream depuis Firebase Storage (URL signée).
+  3. Si non téléchargé et offline → message "Non disponible hors-ligne."
+  4. Bouton télécharger si pas encore en Hive.
+
+DÉCISIONS :
+  → Les URLs Storage expirent. Si expirée pendant lecture → régénérer automatiquement.
+
+DONNÉES LUES : Hive (chemin local), Storage (URL signée si non téléchargé)
+
+
+──────────────────────────────────────────────────────────────────────────
+E12 — MES NOTES
+──────────────────────────────────────────────────────────────────────────
+Rôle : Vue consolidée des notes avec la moyenne générale.
+
+LOGIQUE :
+  1. Lire /grades/{uid}/subjects filtré par semestre.
+  2. Calculer moyenne : Somme(note * coefficient) / Somme(coefficients)
+  3. Code couleur :
+       note/maxNote >= 0.60 → vert (validé)
+       note/maxNote >= 0.40 → orange (moyen)
+       note/maxNote < 0.40  → rouge (insuffisant)
+  4. Cache Hive avec timestamp.
+  5. Tap sur matière → E13.
+
+DÉCISIONS :
+  → Moyenne calculée côté client, pas stockée dans Firestore.
+  → Aucune note → afficher E22 avec "Aucune note pour ce semestre".
+
+DONNÉES LUES : Firestore (/grades/{uid}/subjects), Hive (cache)
+
+
+──────────────────────────────────────────────────────────────────────────
+E13 — DÉTAIL D'UNE NOTE
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir le détail d'une note pour une matière.
+
+LOGIQUE :
+  1. Données en mémoire depuis E12. Pas de nouvel appel.
+  2. Afficher : matière, enseignant, note/maxNote, coefficient,
+     part dans la moyenne, commentaire (si non vide), date de publication.
+
+DÉCISIONS :
+  → Commentaire vide → masquer la section entière. Ne pas afficher "Aucun commentaire".
+  → Part dans la moyenne = (note * coeff) / Somme(tous les coefficients).
+
+DONNÉES LUES : Mémoire (depuis E12)
+
+
+──────────────────────────────────────────────────────────────────────────
+E14 — MES ABSENCES
+──────────────────────────────────────────────────────────────────────────
+Rôle : Suivre ses absences matière par matière.
+
+LOGIQUE :
+  1. Lire /absences/{uid}/subjects.
+  2. Lire /config/absenceThreshold pour le seuil.
+  3. Barre de progression par matière :
+       0–50% du seuil → verte
+       50–80%         → orange
+       80–100%+       → rouge
+  4. Tap sur matière → modal avec la liste des dates d'absences.
+
+DÉCISIONS :
+  → Seuil lu depuis /config/absenceThreshold, jamais hardcodé.
+  → Les dates s'affichent dans un modal, pas une nouvelle page.
+
+DONNÉES LUES : Firestore (/absences/{uid}/subjects, /config/absenceThreshold), Hive
+
+
+──────────────────────────────────────────────────────────────────────────
+E15 — EMPLOI DU TEMPS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Vue hebdomadaire de l'emploi du temps.
+
+LOGIQUE :
+  1. Calculer la clé de semaine : ex "2024-W42".
+  2. Lire /schedule/{filiere}/{weekKey}.
+  3. Surbrillance du cours actuel (comparaison heure courante / startTime+endTime).
+  4. Navigation semaine : mettre à jour weekKey + recharger.
+  5. Pré-charger semaine suivante en arrière-plan.
+  6. Cache Hive : semaine actuelle + suivante.
+  7. onSnapshot pour mises à jour en temps réel (annulation de cours).
+  8. Couleur par matière : générée de façon déterministe (hash du nom).
+
+DÉCISIONS :
+  → Cours annulés : affichés barrés avec fond rouge clair.
+  → Offline → servir depuis Hive avec date de dernière sync.
+
+DONNÉES LUES : Firestore (/schedule/{filiere}/{weekKey}), Hive (cache)
+
+
+──────────────────────────────────────────────────────────────────────────
+E16 — DÉTAIL D'UN CRÉNEAU
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir tous les détails d'un cours.
+
+LOGIQUE :
+  1. Données en mémoire depuis E15. Pas de nouvel appel.
+  2. Afficher : matière, enseignant, salle, horaire, type, statut,
+     motif d'annulation, nouveau créneau si reporté.
+
+DONNÉES LUES : Mémoire (depuis E15)
+
+
+──────────────────────────────────────────────────────────────────────────
+E17 — ANNUAIRE CAMPUS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Trouver un contact de l'université.
+
+LOGIQUE :
+  1. Lire /directory (collection complète au premier accès → mettre en Hive).
+  2. Recherche et filtres : côté client sur la liste en mémoire/Hive.
+  3. Photos de profil : depuis Storage (URL dans le document directory).
+  4. Tap → E18.
+
+DÉCISIONS :
+  → La collection /directory est petite. Charger tout et chercher en local.
+    Plus réactif, moins de lectures Firestore facturées.
+
+DONNÉES LUES : Firestore (/directory), Storage (photos), Hive (cache annuaire)
+
+
+──────────────────────────────────────────────────────────────────────────
+E18 — FICHE CONTACT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir le profil complet d'un contact.
+
+LOGIQUE :
+  1. Données en mémoire depuis E17. Pas de nouvel appel.
+  2. Sections vides masquées (pas d'email → pas de section email).
+
+DONNÉES LUES : Mémoire (depuis E17)
+
+
+──────────────────────────────────────────────────────────────────────────
+E19 — MON PROFIL
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir ses informations et se déconnecter.
+
+LOGIQUE :
+  1. Infos depuis Hive (déjà chargées à la connexion).
+  2. Stats locales : nb cours téléchargés (compter entrées Hive),
+     nb absences totales (depuis Hive).
+  3. Bouton "Se déconnecter" :
+       → Firebase Auth : signOut()
+       → Se désabonner de tous les topics FCM
+       → Vider Hive sélectivement (garder onboarding_done)
+       → Rediriger vers E03
+
+DÉCISIONS :
+  → "Modifier le profil" → désactivé Phase 1. Tooltip "Bientôt disponible".
+  → Déconnexion ne supprime PAS les fichiers PDF téléchargés.
+  → Ne pas effacer onboarding_done à la déconnexion.
+
+DONNÉES LUES : Hive
+DONNÉES ÉCRITES (déconnexion) : Firebase Auth (signOut), FCM (unsubscribe), Hive (clear)
+
+
+──────────────────────────────────────────────────────────────────────────
+E20 — PARAMÈTRES ÉTUDIANT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Gérer les notifications et le cache offline.
+
+LOGIQUE :
+  1. Lire préférences depuis Hive.
+  2. Toggle "Notifications globales" Off → désabonnement de TOUS les topics FCM.
+  3. Toggles individuels → ajuster souscriptions FCM + sauvegarder dans Hive.
+  4. Gestion cache :
+       → Afficher taille occupée par Hive
+       → Vider cache : supprimer fichiers PDF + nettoyer Hive
+         (garder session et préférences)
+       → Demander confirmation avant vidage.
+
+DÉCISIONS :
+  → Notifications globales Off → griser tous les autres toggles.
+
+DONNÉES LUES : Hive (préférences)
+DONNÉES ÉCRITES : Hive (préférences), FCM (subscribe/unsubscribe)
+
+
+──────────────────────────────────────────────────────────────────────────
+E21 — MODE HORS-LIGNE
+──────────────────────────────────────────────────────────────────────────
+Rôle : Composant global affiché sur tous les écrans quand pas de connexion.
+
+LOGIQUE :
+  1. Écouter en permanence la connectivité (package connectivity_plus).
+  2. Connexion perdue → bannière discrète en haut : "Mode hors-ligne — données du [date]"
+  3. Connexion revenue → masquer bannière + synchronisation silencieuse en arrière-plan.
+  4. Sauvegarder timestamp de dernière sync dans Hive.
+
+DÉCISIONS :
+  → Ce composant est au niveau du layout principal, pas écran par écran.
+  → Fonctions inaccessibles offline : créer communiqué, uploader cours, saisir notes.
+  → Fonctions accessibles offline : lire cours, EDT, notes, absences.
+
+DONNÉES LUES : Hive (timestamp dernière sync), Système (état réseau)
+
+
+──────────────────────────────────────────────────────────────────────────
+E22 — ÉTAT VIDE
+──────────────────────────────────────────────────────────────────────────
+Rôle : Widget Flutter réutilisable pour les listes vides.
+
+LOGIQUE :
+  1. Widget paramétrable : message contextuel + bouton d'action.
+  2. Zéro appel Firebase. Composant UI pur.
+  3. Messages contextuels exemples :
+       "Aucun cours disponible pour ce semestre"
+       "Aucun communiqué pour le moment"
+       "Aucune note enregistrée"
+
+DÉCISIONS :
+  → Ne jamais laisser un écran blanc. Toujours afficher E22 si liste vide.
+
+
+════════════════════════════════════════
+GROUPE C — ESPACE ENSEIGNANT (E23–E27)
+════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────
+E23 — DASHBOARD ENSEIGNANT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Page d'accueil de l'enseignant.
+
+LOGIQUE :
+  1. Lire /users/{uid} pour la liste des matières.
+  2. Lire /courses filtré par teacherId pour les stats (nb documents, dernier upload).
+  3. Raccourcis vers E24, E25, E26.
+  4. Accès profil enseignant → E33.
+
+DÉCISIONS :
+  → Si compte en status "pending" → afficher "Compte en cours de validation."
+
+DONNÉES LUES : Firestore (/users/{uid}, /courses)
+
+
+──────────────────────────────────────────────────────────────────────────
+E24 — UPLOADER UN COURS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Publier un document pour les étudiants.
+
+LOGIQUE :
+  1. Sélecteur matière (depuis /users/{uid}.subjects).
+  2. Sélecteur type + champ titre + sélecteur fichier (PDF/DOCX, max 20 Mo).
+  3. Bouton "Publier" :
+       a. Uploader dans Storage : /courses/{courseId}/{timestamp}_{filename}
+       b. Récupérer le downloadURL.
+       c. Écrire /courses/{courseId}/documents/{newDocId}
+       d. Mettre à jour /courses/{courseId}.updatedAt = now
+       e. Cloud Function déclenche : FCM notif à la filière.
+  4. Barre de progression + message de confirmation.
+
+DÉCISIONS :
+  → Bloquer si offline.
+  → Si upload échoue : supprimer le fichier partiel de Storage. Opération atomique.
+  → Nom de fichier dans Storage inclut un timestamp (évite les doublons).
+
+DONNÉES ÉCRITES : Storage, Firestore (/courses), FCM (via Cloud Function)
+
+
+──────────────────────────────────────────────────────────────────────────
+E25 — SAISIR LES NOTES
+──────────────────────────────────────────────────────────────────────────
+Rôle : Publier les notes d'une évaluation.
+
+LOGIQUE :
+  1. Sélecteurs : matière + type évaluation + note maximale.
+  2. Lire /users (filtrés par filière + niveau) pour la liste des étudiants.
+  3. Champ note pour chaque étudiant. Moyenne de classe calculée en temps réel.
+  4. Bouton "Enregistrer et publier" :
+       a. Valider toutes les notes (non vides, <= note max).
+       b. WriteBatch Firestore pour écrire toutes les notes en une seule transaction.
+       c. Cloud Function déclenche : FCM individuelle à chaque étudiant.
+
+DÉCISIONS :
+  → WriteBatch est crucial : soit tout passe, soit rien. Évite les notes partielles.
+  → Note existante pour cette évaluation → confirmation avant d'écraser.
+
+DONNÉES LUES : Firestore (/users)
+DONNÉES ÉCRITES : Firestore (/grades/{uid}/subjects - WriteBatch), FCM (via Cloud Function)
+
+
+──────────────────────────────────────────────────────────────────────────
+E26 — SAISIR LES ABSENCES
+──────────────────────────────────────────────────────────────────────────
+Rôle : Faire l'appel d'une séance.
+
+LOGIQUE :
+  1. Sélecteurs : matière + date de séance.
+  2. Liste des étudiants (depuis /users). Tous "Présent" par défaut.
+  3. Toggle individuel Présent/Absent. Compteur en temps réel.
+  4. Bouton "Marquer tous présents" pour reset rapide.
+  5. Bouton "Valider l'appel" :
+       a. WriteBatch : pour chaque absent, incrémenter total + ajouter date dans records.
+       b. Cloud Function : vérifier seuil et notifier si dépassé.
+
+DÉCISIONS :
+  → Écrire seulement les ABSENCES. Jamais les présences. Moins de données.
+  → Vérifier si l'appel de ce jour/matière a déjà été fait. Avertir si oui.
+  → Bloquer si offline.
+
+DONNÉES LUES : Firestore (/users, /absences/{uid})
+DONNÉES ÉCRITES : Firestore (/absences - WriteBatch), FCM (via Cloud Function)
+
+
+──────────────────────────────────────────────────────────────────────────
+E27 — METTRE À JOUR L'EDT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Modifier, annuler ou reporter un cours.
+
+LOGIQUE :
+  1. Lire /schedule/{filiere}/{weekKey} et filtrer par teacherId.
+  2. Tap sur créneau → modal : salle, horaire, statut (Normal/Annulé/Reporté).
+  3. Si Annulé : champ motif (optionnel).
+  4. Si Reporté : sélecteur nouveau créneau.
+  5. Confirmer → mettre à jour Firestore + Cloud Function notifie les étudiants.
+
+DÉCISIONS :
+  → L'enseignant ne modifie QUE ses propres créneaux (règles Firestore).
+  → Bloquer si offline.
+
+DONNÉES LUES : Firestore (/schedule)
+DONNÉES ÉCRITES : Firestore (/schedule), FCM (via Cloud Function)
+
+
+════════════════════════════════════════
+GROUPE D — PROFILS ENSEIGNANT (E33–E34)
+════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────
+E33 — PROFIL ENSEIGNANT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir son profil d'enseignant.
+
+LOGIQUE :
+  1. Lire /users/{uid} depuis Hive.
+  2. Afficher : nom, grade, matières, disponibilités. (Lecture seule Phase 1)
+  3. Bouton déconnexion → même logique que E19.
+
+DONNÉES LUES : Hive / Firestore (/users/{uid})
+
+
+──────────────────────────────────────────────────────────────────────────
+E34 — PARAMÈTRES ENSEIGNANT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Notifications et changement de mot de passe.
+
+LOGIQUE :
+  1. Toggles notifications : même logique que E20.
+  2. Toggle "Rappel avant cours" → subscribe/unsubscribe topic rappel EDT.
+  3. Changer mot de passe :
+       → Vérifier l'ancien (signInWithEmailAndPassword de vérification)
+       → Appeler Firebase Auth : updatePassword(newPassword)
+
+DÉCISIONS :
+  → Toujours vérifier l'ancien mot de passe avant le changement.
+  → Après succès : confirmation sans déconnexion.
+
+DONNÉES ÉCRITES : Firebase Auth (updatePassword), FCM (subscribe/unsubscribe), Hive
+
+
+════════════════════════════════════════
+GROUPE E — ESPACE ADMIN (E28–E32 + E35–E36)
+════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────
+E28 — DASHBOARD ADMIN
+──────────────────────────────────────────────────────────────────────────
+Rôle : Vue d'ensemble de l'université.
+
+LOGIQUE :
+  1. Statistiques :
+       → /users : compter par rôle
+       → /announcements : compter les publiés
+  2. /activityLogs (limit 20, orderBy timestamp desc) pour le fil d'activité.
+  3. /config/systemStatus pour l'indicateur santé système.
+
+DÉCISIONS :
+  → Stats rafraîchies toutes les 5 min ou sur pull-to-refresh. Pas en temps réel.
+
+DONNÉES LUES : Firestore (/users, /announcements, /activityLogs, /config/systemStatus)
+
+
+──────────────────────────────────────────────────────────────────────────
+E29 — CRÉER UN COMMUNIQUÉ
+──────────────────────────────────────────────────────────────────────────
+Rôle : Rédiger et publier un communiqué officiel.
+
+LOGIQUE :
+  1. Champs : titre, catégorie, corps, ciblage (Tous/Filière/Niveau), pièce jointe.
+  2. Bouton "Publier" :
+       a. Si pièce jointe : upload Storage → récupérer URL.
+       b. Écrire /announcements/{newId} avec tous les champs.
+       c. Cloud Function → FCM au topic ciblé.
+       d. Écrire /activityLogs.
+
+DÉCISIONS :
+  → Bloquer si offline. Le communiqué doit déclencher FCM immédiatement.
+  → Pièce jointe > 20 Mo → refuser.
+  → Ciblage "Tous" → topic "all". Ciblage "Filière X" → topic "filiere_X".
+
+DONNÉES ÉCRITES : Firestore (/announcements, /activityLogs), Storage, FCM (via Cloud Fn)
+
+
+──────────────────────────────────────────────────────────────────────────
+E30 — GÉRER LES COMMUNIQUÉS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Gérer les communiqués publiés.
+
+LOGIQUE :
+  1. Lire /announcements (tous statuts, orderBy createdAt desc).
+  2. Modifier → formulaire pré-rempli → updateDoc.
+  3. Archiver → updateDoc status: "archived".
+  4. Supprimer → deleteDoc + supprimer pièce jointe Storage si présente.
+     Toujours demander confirmation.
+
+DÉCISIONS :
+  → Modification sans nouvelle notification FCM.
+  → Archivé = invisible pour les étudiants (E07), visible ici.
+
+DONNÉES LUES : Firestore (/announcements)
+DONNÉES ÉCRITES : Firestore (/announcements), Storage (suppression pièce jointe)
+
+
+──────────────────────────────────────────────────────────────────────────
+E31 — GESTION DES UTILISATEURS
+──────────────────────────────────────────────────────────────────────────
+Rôle : Gérer tous les comptes.
+
+LOGIQUE :
+  1. Lire /users (collection complète). Recherche + filtres côté client.
+  2. Tap sur utilisateur → modal :
+       → Vue profil complet
+       → Changer le rôle (avec confirmation)
+       → Désactiver le compte : Firestore status: "inactive" + Cloud Function
+         Admin SDK pour désactiver Firebase Auth
+       → Approuver compte (si status "pending") : updateDoc status: "active"
+
+DÉCISIONS :
+  → Ne pas permettre à l'admin de désactiver son propre compte.
+  → La désactivation Firebase Auth (Cloud Function) empêche la reconnexion.
+
+DONNÉES LUES : Firestore (/users)
+DONNÉES ÉCRITES : Firestore (/users), Cloud Function (désactivation Auth)
+
+
+──────────────────────────────────────────────────────────────────────────
+E32 — AJOUTER UN UTILISATEUR
+──────────────────────────────────────────────────────────────────────────
+Rôle : Créer un compte manuellement.
+
+LOGIQUE :
+  1. Champs : matricule, nom, rôle, filière + niveau (si étudiant),
+     matières (si enseignant).
+  2. Mot de passe provisoire généré automatiquement (6 car. alphanumériques).
+  3. Bouton "Créer le compte" :
+       a. Cloud Function Admin : createUser(email, motDePasseProvisoire)
+       b. Écrire /users/{uid} avec tous les champs + forcePasswordChange: true
+       c. Afficher le mot de passe provisoire à l'admin (une seule fois).
+       d. Écrire /activityLogs.
+
+DÉCISIONS :
+  → Mot de passe provisoire non stocké dans Firestore. Montré une fois seulement.
+  → Utiliser Cloud Function Admin pour ne pas déconnecter l'admin pendant la création.
+  → Vérifier unicité du matricule dans /users avant de créer.
+
+DONNÉES ÉCRITES : Cloud Function (Firebase Auth createUser),
+                  Firestore (/users/{uid}, /activityLogs)
+
+
+──────────────────────────────────────────────────────────────────────────
+E35 — PROFIL ADMIN
+──────────────────────────────────────────────────────────────────────────
+Rôle : Voir son profil et son activité.
+
+LOGIQUE :
+  1. Lire /users/{uid} depuis Hive.
+  2. Statistiques d'activité : /activityLogs filtré par actorUid = uid courant.
+  3. Historique : 10 derniers logs de cet admin.
+  4. Bouton déconnexion → même logique que E19.
+
+DONNÉES LUES : Hive / Firestore (/users/{uid}, /activityLogs)
+
+
+──────────────────────────────────────────────────────────────────────────
+E36 — PARAMÈTRES ADMIN
+──────────────────────────────────────────────────────────────────────────
+Rôle : Paramètres avancés administrateur.
+
+LOGIQUE :
+  1. Changer mot de passe : même logique que E34.
+  2. Toggle "Notifs nouvelles inscriptions" → topic "admin_registrations".
+  3. Toggle "Alertes système" → topic "admin_alerts".
+  4. Gestion codes secrets :
+       → Lire /config/codes (teacherCode + adminCode)
+       → Afficher les codes actuels
+       → Bouton "Régénérer" : générer nouveau code + écrire Firestore.
+         L'ancien code est immédiatement invalidé.
+
+DÉCISIONS :
+  → /config/codes : accessible UNIQUEMENT par les admins (règles Firestore).
+  → Ne jamais exposer les codes aux étudiants ou enseignants.
+
+DONNÉES LUES : Firestore (/config/codes), Hive (préférences)
+DONNÉES ÉCRITES : Firebase Auth (updatePassword), Firestore (/config/codes),
+                  FCM (subscribe/unsubscribe), Hive
+
+
+════════════════════════════════════════
+GROUPE F — INSCRIPTION (E37–E38)
+════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────
+E37 — SÉLECTION STATUT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Choisir le type de compte pour l'inscription.
+
+LOGIQUE :
+  1. 3 options : Étudiant → E38 / Enseignant → formulaire avec code /
+     Administrateur → formulaire avec code direction.
+  2. Zéro appel Firebase. Navigation pure.
+  3. Note visible : "Inscription Enseignant/Admin requiert un code établissement."
+
+
+──────────────────────────────────────────────────────────────────────────
+E38 — INSCRIPTION ÉTUDIANT
+──────────────────────────────────────────────────────────────────────────
+Rôle : Permettre à un étudiant de créer son compte.
+
+LOGIQUE :
+  1. Champs : nom complet, matricule, filière (ISN/CDN/INS),
+     promotion (L1/L2/L3/M1/M2), mot de passe, confirmation.
+  2. Bouton "Créer mon compte" :
+       a. Vérifier unicité du matricule dans /users.
+       b. createUserWithEmailAndPassword(matricule@uiecc.ac.cm, password)
+       c. Écrire /users/{uid} : { name, matricule, role:"student",
+          filiere, niveau, status:"active", forcePasswordChange:false, createdAt }
+       d. Subscribe FCM : topic "all" + "filiere_XXX"
+       e. Sauvegarder dans Hive.
+       f. Rediriger vers E06 (Dashboard étudiant). Compte actif immédiatement.
+
+DÉCISIONS :
+  → Vérifier unicité du matricule AVANT createUser.
+  → Si createUser réussit mais Firestore échoue → deleteUser et afficher erreur.
+  → Pas de validation admin requise pour les étudiants.
+
+DONNÉES LUES : Firestore (/users - vérification unicité)
+DONNÉES ÉCRITES : Firebase Auth (createUser), Firestore (/users/{uid}),
+                  FCM (subscribe), Hive
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARTIE 3 — CLOUD FUNCTIONS NÉCESSAIRES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  onCourseDocumentCreated   (trigger Firestore)
+  → Nouveau document dans /courses/{id}/documents
+  → Envoyer FCM au topic de la filière concernée
+
+  onGradesPublished         (trigger Firestore)
+  → Création ou modification dans /grades/{uid}/subjects/{subjectId}
+  → Envoyer FCM individuelle à l'étudiant
+
+  onScheduleUpdated         (trigger Firestore)
+  → Modification d'un créneau dans /schedule avec status != "normal"
+  → Envoyer FCM aux étudiants de la filière
+
+  onAnnouncementCreated     (trigger Firestore)
+  → Nouveau document dans /announcements
+  → Envoyer FCM au topic ciblé (targetGroup)
+
+  onAbsenceThresholdReached (trigger Firestore)
+  → Mise à jour de /absences/{uid}/subjects/{id}.total
+  → Si total >= absenceThreshold → FCM à l'étudiant
+
+  createAdminUser           (callable function)
+  → Appelée par un admin depuis E32
+  → Firebase Admin SDK : createUser(email, password)
+  → Retourne l'uid créé
+
+  disableUser               (callable function)
+  → Appelée par un admin depuis E31
+  → Firebase Admin SDK : désactiver le compte Auth
+
+  verifySecretCode          (callable function)
+  → Appelée depuis l'inscription enseignant/admin
+  → Vérifie le code secret sans l'exposer côté client
+  → Retourne true/false
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARTIE 4 — ORDRE RECOMMANDÉ DE DÉVELOPPEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ÉTAPE 1 — FONDATIONS (Semaine 1)
+  → Configurer Firebase (Auth, Firestore, Storage, FCM)
+  → Mettre en place Hive
+  → Créer les modèles de données Dart (User, Course, Grade, etc.)
+  → Implémenter le service d'authentification
+
+  ÉTAPE 2 — AUTHENTIFICATION (Semaine 1-2)
+  → E01 Splash + routing / E02 Onboarding / E03 Connexion
+  → E05 Première connexion / E37 Sélection statut / E38 Inscription étudiant
+  → Tester le flow complet : inscription → connexion → dashboard
+
+  ÉTAPE 3 — CONTENU PRINCIPAL (Semaine 2-3)
+  → E06 Dashboard / E07-E08 Communiqués / E12-E13 Notes
+  → E14 Absences / E15-E16 Emploi du temps
+  → Vérifier le mode offline sur toutes ces pages
+
+  ÉTAPE 4 — BIBLIOTHÈQUE DE COURS (Semaine 3)
+  → E09-E10 Bibliothèque + documents / E11 Visionneuse PDF
+  → Tester téléchargement offline et lecture locale
+
+  ÉTAPE 5 — ACTIONS ENSEIGNANT (Semaine 4)
+  → E23 Dashboard enseignant / E24 Upload cours / E25 Notes
+  → E26 Absences / E27 EDT + toutes les Cloud Functions associées
+
+  ÉTAPE 6 — ESPACE ADMIN (Semaine 5)
+  → E28 Dashboard / E29-E30 Communiqués / E31-E32 Utilisateurs
+  → Cloud Functions Admin (createUser, disableUser)
+
+  ÉTAPE 7 — PROFILS ET PARAMÈTRES (Semaine 6)
+  → E19-E20 Étudiant / E33-E34 Enseignant / E35-E36 Admin
+  → E04 Mot de passe oublié / E17-E18 Annuaire
+
+  ÉTAPE 8 — POLISH ET TESTS (Semaine 7-8)
+  → E21 Mode hors-ligne global / E22 États vides partout
+  → Tests sur appareils Android réels + tests mode avion
+  → Vérification des Security Rules Firestore
+  → Optimisation des performances
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIN DU DOCUMENT
+Acadify Phase 1 · Logique Backend Complète · 38 Écrans
+Androd · Codify · UIECC Sangmélima · 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  
+
+  

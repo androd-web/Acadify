@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/services/course_service.dart';
+import '../../../core/models/course_model.dart';
+import '../../../core/models/user_model.dart';
 
 class AttendanceTrackingScreen extends StatefulWidget {
   const AttendanceTrackingScreen({super.key});
@@ -12,58 +16,112 @@ class AttendanceTrackingScreen extends StatefulWidget {
 }
 
 class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
-  final List<Map<String, dynamic>> _students = [
-    {
-      'id': 'MAT-2024-001',
-      'name': 'Jean-Pierre Sarr',
-      'initials': 'JS',
-      'isPresent': true,
-    },
-    {
-      'id': 'MAT-2024-042',
-      'name': 'Marie Traoré',
-      'initials': 'MT',
-      'isPresent': false,
-    },
-    {
-      'id': 'MAT-2024-118',
-      'name': 'Cédric Loba',
-      'initials': 'CL',
-      'isPresent': true,
-      'warning': 'ABS++',
-    },
-    {
-      'id': 'MAT-2024-009',
-      'name': 'Awa Koné',
-      'initials': 'AK',
-      'isPresent': true,
-    },
-    {
-      'id': 'MAT-2024-056',
-      'name': 'Bakary Diallo',
-      'initials': 'BD',
-      'isPresent': true,
-    },
-  ];
+  final CourseService _courseService = CourseService();
+  final Box _userBox = Hive.box('userBox');
 
-  void _toggleStatus(int index, bool isPresent) {
+  List<CourseModel> _courses = [];
+  CourseModel? _selectedCourse;
+  List<UserModel> _students = [];
+  final Map<String, bool> _attendanceStatus = {}; // studentUid -> isPresent
+  
+  bool _isLoadingCourses = true;
+  bool _isLoadingStudents = false;
+  bool _isValidating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCourses();
+  }
+
+  Future<void> _loadCourses() async {
+    final String? uid = _userBox.get('uid');
+    if (uid != null) {
+      final courses = await _courseService.getTeacherCourses(uid);
+      if (mounted) {
+        setState(() {
+          _courses = courses;
+          if (_courses.isNotEmpty) {
+            _selectedCourse = _courses.first;
+            _loadStudents();
+          }
+          _isLoadingCourses = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadStudents() async {
+    if (_selectedCourse == null) return;
+    
+    setState(() => _isLoadingStudents = true);
+    
+    final students = await _courseService.getStudentsForCourse(
+      _selectedCourse!.filiere,
+      _selectedCourse!.niveau,
+    );
+
+    if (mounted) {
+      setState(() {
+        _students = students;
+        _attendanceStatus.clear();
+        for (var student in _students) {
+          _attendanceStatus[student.uid] = true; // Par défaut présent
+        }
+        _isLoadingStudents = false;
+      });
+    }
+  }
+
+  void _toggleStatus(String uid, bool isPresent) {
     setState(() {
-      _students[index]['isPresent'] = isPresent;
+      _attendanceStatus[uid] = isPresent;
     });
   }
 
   void _markAllPresent() {
     setState(() {
-      for (var student in _students) {
-        student['isPresent'] = true;
+      for (var uid in _attendanceStatus.keys) {
+        _attendanceStatus[uid] = true;
       }
     });
   }
 
+  Future<void> _handleValidate() async {
+    if (_selectedCourse == null || _students.isEmpty) return;
+
+    final List<String> absentUids = _attendanceStatus.entries
+        .where((e) => e.value == false)
+        .map((e) => e.key)
+        .toList();
+
+    setState(() => _isValidating = true);
+
+    final success = await _courseService.recordAttendance(
+      courseId: _selectedCourse!.id,
+      subjectName: _selectedCourse!.name,
+      absentStudentUids: absentUids,
+    );
+
+    if (mounted) {
+      setState(() => _isValidating = false);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appel validé avec succès !')),
+        );
+        context.pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de la validation.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    int presentCount = _students.where((s) => s['isPresent'] == true).length;
-    int absentCount = _students.length - presentCount;
+    int presentCount = _attendanceStatus.values.where((v) => v == true).length;
+    int absentCount = _attendanceStatus.length - presentCount;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -73,24 +131,31 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
           _buildAppBar(context),
           Positioned.fill(
             top: 80,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  _buildStickyConfig(context),
-                  const SizedBox(height: 24),
-                  _buildLiveCounter(presentCount, absentCount),
-                  const SizedBox(height: 24),
-                  _buildBulkActions(),
-                  const SizedBox(height: 16),
-                  _buildStudentList(context),
-                  const SizedBox(height: 140),
-                ],
+            child: _isLoadingCourses
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    _buildStickyConfig(context),
+                    const SizedBox(height: 24),
+                    _buildLiveCounter(presentCount, absentCount),
+                    const SizedBox(height: 24),
+                    _buildBulkActions(),
+                    const SizedBox(height: 16),
+                    if (_isLoadingStudents)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      _buildStudentList(context),
+                    const SizedBox(height: 140),
+                  ],
+                ),
               ),
-            ),
           ),
+          if (_isValidating)
+            Container(color: Colors.black54, child: const Center(child: CircularProgressIndicator())),
           _buildBottomAction(context, presentCount, absentCount),
         ],
       ),
@@ -98,7 +163,6 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    final theme = Theme.of(context);
     return Positioned(
       top: 0,
       left: 0,
@@ -107,9 +171,6 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
         child: Container(
           height: 64,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
-          ),
           child: Row(
             children: [
               IconButton(
@@ -153,18 +214,21 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Text(
-                    'Algorithmique L2',
-                    style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
-                  ),
-                  const Icon(
-                    Icons.expand_more,
-                    color: AppColors.onSurfaceVariant,
-                    size: 20,
-                  ),
-                ],
+              InkWell(
+                onTap: _showCoursePicker,
+                child: Row(
+                  children: [
+                    Text(
+                      _selectedCourse?.name ?? 'Sélectionner',
+                      style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
+                    ),
+                    const Icon(
+                      Icons.expand_more,
+                      color: AppColors.onSurfaceVariant,
+                      size: 20,
+                    ),
+                  ],
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -202,6 +266,32 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showCoursePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => ListView.builder(
+        shrinkWrap: true,
+        itemCount: _courses.length,
+        itemBuilder: (context, index) {
+          final course = _courses[index];
+          return ListTile(
+            title: Text(course.name, style: const TextStyle(color: Colors.white)),
+            subtitle: Text('${course.filiere} - ${course.niveau}', style: const TextStyle(color: Colors.white70)),
+            onTap: () {
+              setState(() {
+                _selectedCourse = course;
+                _loadStudents();
+              });
+              Navigator.pop(context);
+            },
+          );
+        },
       ),
     );
   }
@@ -272,7 +362,13 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: () {
+            setState(() {
+              for (var uid in _attendanceStatus.keys) {
+                _attendanceStatus[uid] = false;
+              }
+            });
+          },
           child: Text(
             'Réinitialiser',
             style: AppTextStyles.labelMedium.copyWith(
@@ -291,7 +387,8 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
       itemCount: _students.length,
       itemBuilder: (context, index) {
         final student = _students[index];
-        final bool isAbsent = !student['isPresent'];
+        final bool isPresent = _attendanceStatus[student.uid] ?? true;
+        final bool isAbsent = !isPresent;
         return Container(
           margin: const EdgeInsets.only(bottom: 4),
           padding: const EdgeInsets.all(12),
@@ -317,7 +414,7 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    student['initials'],
+                    student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
                     style: AppTextStyles.labelMedium.copyWith(
                       color: AppColors.onSurfaceVariant,
                     ),
@@ -329,53 +426,15 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          student['name'],
-                          style: AppTextStyles.headlineMedium.copyWith(
-                            fontSize: 16,
-                            color: AppColors.onSurface.withValues(alpha: isAbsent ? 0.6 : 1.0),
-                          ),
-                        ),
-                        if (student['warning'] != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.amber.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: AppColors.amber.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.warning,
-                                  size: 10,
-                                  color: AppColors.amber,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  student['warning'],
-                                  style: const TextStyle(
-                                    fontSize: 8,
-                                    color: AppColors.amber,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ],
+                    Text(
+                      student.name,
+                      style: AppTextStyles.headlineMedium.copyWith(
+                        fontSize: 16,
+                        color: AppColors.onSurface.withValues(alpha: isAbsent ? 0.6 : 1.0),
+                      ),
                     ),
                     Text(
-                      student['id'],
+                      student.matricule,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -392,14 +451,14 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
                 child: Row(
                   children: [
                     _buildStatusButton(
-                      index,
+                      student.uid,
                       true,
-                      student['isPresent'] == true,
+                      isPresent,
                     ),
                     _buildStatusButton(
-                      index,
+                      student.uid,
                       false,
-                      student['isPresent'] == false,
+                      isAbsent,
                     ),
                   ],
                 ),
@@ -411,12 +470,12 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
     );
   }
 
-  Widget _buildStatusButton(int index, bool isPresent, bool isActive) {
+  Widget _buildStatusButton(String uid, bool isPresent, bool isActive) {
     final Color activeColor = isPresent ? AppColors.primary : AppColors.error;
     final IconData icon = isPresent ? Icons.check : Icons.close;
 
     return InkWell(
-      onTap: () => _toggleStatus(index, isPresent),
+      onTap: () => _toggleStatus(uid, isPresent),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         width: 32,
@@ -489,9 +548,7 @@ class _AttendanceTrackingScreenState extends State<AttendanceTrackingScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  // Show confirmation
-                },
+                onPressed: _isValidating ? null : _handleValidate,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.amber,
                   foregroundColor: Colors.black,

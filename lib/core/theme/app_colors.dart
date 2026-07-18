@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Brand Colors (from Mockups)
-  static const Color background = Color(0xFF06090A);
+  static const Color background = Color(0xFF040D07);
   static const Color surface = Color(0xFF101412);
-  static const Color primary = Color(0xFF83D7B1);
+  static const Color primary = Color(0xFF0B6E4F);
   static const Color primaryContainer = Color(0xFF0B6E4F);
-  static const Color secondary = Color(0xFF77D9AE);
+  static const Color primaryAccent = Color(0xFF22AA7A);
+  static const Color secondary = Color(0xFF168560);
   static const Color secondaryContainer = Color(0xFF007D58);
   static const Color onSecondary = Color(0xFF003826); // Added
   static const Color onSecondaryContainer = Color(0xFFBAFFDC); // Added

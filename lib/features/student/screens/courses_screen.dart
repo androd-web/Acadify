@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/models/course_model.dart';
+import '../../../core/theme/app_colors.dart';
 
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
@@ -9,7 +13,66 @@ class CoursesScreen extends StatefulWidget {
 }
 
 class _CoursesScreenState extends State<CoursesScreen> {
-  int _selectedSemester = 0;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Box _offlineBox = Hive.box('offlineBox');
+  final Box _userBox = Hive.box('userBox');
+
+  int _selectedSemester = 1; // 1 ou 2
+  bool _isLoading = true;
+  List<CourseModel> _allCourses = [];
+  String _searchQuery = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCachedCourses();
+    _fetchCourses();
+  }
+
+  void _loadCachedCourses() {
+    final cached = _offlineBox.get('courses_list_s$_selectedSemester');
+    if (cached != null) {
+      setState(() {
+        _allCourses = (cached as List)
+            .map((e) => CourseModel.fromMap(Map<String, dynamic>.from(e), e['id']))
+            .toList();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchCourses() async {
+    final String? filiere = _userBox.get('filiere');
+    if (filiere == null) return;
+
+    try {
+      final snapshot = await _firestore
+          .collection('courses')
+          .where('filiere', isEqualTo: filiere)
+          .where('semester', isEqualTo: _selectedSemester)
+          .get();
+
+      final courses = snapshot.docs.map((doc) => CourseModel.fromMap(doc.data(), doc.id)).toList();
+      
+      if (mounted) {
+        setState(() {
+          _allCourses = courses;
+          _isLoading = false;
+        });
+      }
+
+      // Cache pour le mode offline
+      _offlineBox.put('courses_list_s$_selectedSemester', courses.map((e) => e.toMap()..['id'] = e.id).toList());
+    } catch (e) {
+      debugPrint('Error fetching courses: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<CourseModel> get _filteredCourses {
+    if (_searchQuery.isEmpty) return _allCourses;
+    return _allCourses.where((c) => c.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,24 +84,43 @@ class _CoursesScreenState extends State<CoursesScreen> {
           _buildAppBar(context),
           Positioned.fill(
             top: 100,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  _buildSearchBar(context),
-                  const SizedBox(height: 20),
-                  _buildSemesterSelector(context),
-                  const SizedBox(height: 24),
-                  _buildCourseList(context),
-                  const SizedBox(height: 120),
-                ],
+            child: RefreshIndicator(
+              onRefresh: _fetchCourses,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    _buildSearchBar(context),
+                    const SizedBox(height: 20),
+                    _buildSemesterSelector(context),
+                    const SizedBox(height: 24),
+                    if (_isLoading && _allCourses.isEmpty)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_filteredCourses.isEmpty)
+                      _buildEmptyState()
+                    else
+                      _buildCourseList(context),
+                    const SizedBox(height: 120),
+                  ],
+                ),
               ),
             ),
           ),
-          _buildBottomNavBar(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Column(
+      children: [
+        const SizedBox(height: 40),
+        Icon(Icons.search_off, size: 64, color: AppColors.onSurface.withValues(alpha: 0.1)),
+        const SizedBox(height: 16),
+        Text('Aucune matière trouvée', style: TextStyle(color: AppColors.onSurface.withValues(alpha: 0.5))),
+      ],
     );
   }
 
@@ -69,15 +151,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       style: TextStyle(color: colorScheme.onSurface, fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.search, color: colorScheme.onSurface),
-                    onPressed: () {},
-                  ),
+                  const SizedBox(width: 48), // Spacer pour l'équilibre
                 ],
-              ),
-              Text(
-                'Accédez à vos ressources académiques',
-                style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -93,9 +168,9 @@ class _CoursesScreenState extends State<CoursesScreen> {
         color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: TextField(
+        onChanged: (value) => setState(() => _searchQuery = value),
         style: TextStyle(color: colorScheme.onSurface),
         decoration: InputDecoration(
           hintText: 'Rechercher une matière',
@@ -119,8 +194,22 @@ class _CoursesScreenState extends State<CoursesScreen> {
       ),
       child: Row(
         children: [
-          _buildSemesterButton(context, 'Semestre 1', _selectedSemester == 0, () => setState(() => _selectedSemester = 0)),
-          _buildSemesterButton(context, 'Semestre 2', _selectedSemester == 1, () => setState(() => _selectedSemester = 1)),
+          _buildSemesterButton(context, 'Semestre 1', _selectedSemester == 1, () {
+            setState(() {
+              _selectedSemester = 1;
+              _isLoading = true;
+            });
+            _loadCachedCourses();
+            _fetchCourses();
+          }),
+          _buildSemesterButton(context, 'Semestre 2', _selectedSemester == 2, () {
+            setState(() {
+              _selectedSemester = 2;
+              _isLoading = true;
+            });
+            _loadCachedCourses();
+            _fetchCourses();
+          }),
         ],
       ),
     );
@@ -154,51 +243,27 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
   Widget _buildCourseList(BuildContext context) {
     return Column(
-      children: [
-        _buildCourseCard(
-          context,
-          Icons.code,
-          'Algorithmique &\nStructure de Données',
-          'Dr. Bakari',
-          '12 documents',
-          isOffline: true,
-          isUpdated: true,
-        ),
-        const SizedBox(height: 16),
-        _buildCourseCard(
-          context,
-          Icons.router,
-          'Réseaux Mobiles &\nSécurité',
-          'Mme. Diallo',
-          '8 documents',
-          isNew: true,
-        ),
-        const SizedBox(height: 16),
-        _buildCourseCard(
-          context,
-          Icons.functions,
-          'Mathématiques\nDiscrètes',
-          'M. Touré',
-          '15 documents',
-        ),
-      ],
+      children: _filteredCourses.map((course) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _buildCourseCard(context, course),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildCourseCard(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String prof,
-    String docs, {
-    bool isOffline = false,
-    bool isUpdated = false,
-    bool isNew = false,
-  }) {
+  Widget _buildCourseCard(BuildContext context, CourseModel course) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    
+    // Déterminer une icône basée sur le nom (très simplifié)
+    IconData icon = Icons.book;
+    if (course.name.toLowerCase().contains('math')) icon = Icons.functions;
+    if (course.name.toLowerCase().contains('réseau')) icon = Icons.router;
+    if (course.name.toLowerCase().contains('algo')) icon = Icons.code;
+
     return GestureDetector(
-      onTap: () => context.push('/course-documents'),
+      onTap: () => context.push('/course-documents', extra: course),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -216,7 +281,6 @@ class _CoursesScreenState extends State<CoursesScreen> {
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colorScheme.primaryContainer.withValues(alpha: 0.2)),
                   ),
                   child: Icon(icon, color: colorScheme.primary),
                 ),
@@ -225,9 +289,9 @@ class _CoursesScreenState extends State<CoursesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: theme.textTheme.headlineMedium?.copyWith(fontSize: 18, height: 1.2)),
+                      Text(course.name, style: theme.textTheme.headlineMedium?.copyWith(fontSize: 18, height: 1.2)),
                       const SizedBox(height: 4),
-                      Text('Prof: $prof', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+                      Text('Prof: ${course.teacherName}', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -243,107 +307,16 @@ class _CoursesScreenState extends State<CoursesScreen> {
                   children: [
                     Icon(Icons.description, size: 16, color: colorScheme.onSurfaceVariant),
                     const SizedBox(width: 4),
-                    Text(docs, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+                    Text('Voir les documents', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
                   ],
                 ),
-                Row(
-                  children: [
-                    if (isOffline)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: colorScheme.primaryContainer.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.cloud_done, size: 12, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text('Offline', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(width: 8),
-                    if (isUpdated)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: colorScheme.secondaryContainer.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                        child: Text('Mis à jour', style: TextStyle(color: colorScheme.secondary, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                    if (isNew)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: const Color(0xFFE8A317).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                        child: const Text('Nouveau', style: TextStyle(color: Color(0xFFE8A317), fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                    if (!isOffline && !isUpdated && !isNew)
-                      Icon(Icons.cloud_download, size: 20, color: colorScheme.onSurfaceVariant),
-                  ],
-                ),
+                const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.onSurfaceVariant),
               ],
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: const EdgeInsets.only(top: 12, bottom: 24, left: 16, right: 16),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainer,
-          border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildBottomNavItem(context, Icons.home, 'Accueil', false, () => context.go('/student-dashboard')),
-            _buildBottomNavItem(context, Icons.menu_book, 'Cours', true, () {}),
-            _buildBottomNavItem(context, Icons.grade, 'Notes', false, () => context.push('/grades')),
-            _buildBottomNavItem(context, Icons.calendar_month, 'Planning', false, () => context.push('/schedule')),
-            _buildBottomNavItem(context, Icons.person, 'Profil', false, () => context.push('/profile')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavItem(BuildContext context, IconData icon, String label, bool isActive, VoidCallback onTap) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isActive)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, color: Colors.white, size: 24),
-                  const SizedBox(width: 4),
-                  Text(label, style: theme.textTheme.labelMedium?.copyWith(color: Colors.white)),
-                ],
-              ),
-            )
-          else
-            Column(
-              children: [
-                Icon(icon, color: colorScheme.onSurfaceVariant, size: 24),
-                const SizedBox(height: 4),
-                Text(label, style: theme.textTheme.labelMedium),
-              ],
-            ),
-        ],
       ),
     );
   }
 }
+

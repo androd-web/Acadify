@@ -1,0 +1,248 @@
+================================================================
+        ACADIFY — DESCRIPTION DES 36 ÉCRANS (PHASE 1)
+        Codify · UIECC Sangmélima · 2026
+================================================================
+
+----------------------------------------------------------------
+                    ÉCRANS TRANSVERSAUX (tous rôles)
+----------------------------------------------------------------
+
+E01 — Splash Screen
+    Écran de démarrage affiché au lancement de l'app.
+    Affiche le logo Acadify avec une animation.
+    Vérifie en arrière-plan si l'utilisateur est déjà connecté.
+    Redirige automatiquement vers Connexion ou Dashboard.
+
+E02 — Onboarding
+    3 slides de présentation affichées uniquement au 1er lancement.
+    Présente les 3 fonctions clés de l'app.
+    Contient un bouton "Commencer" qui mène à la Connexion.
+    Ne s'affiche plus jamais après le premier passage.
+
+E03 — Connexion
+    Formulaire de connexion avec matricule et mot de passe.
+    Gère les erreurs de mauvais identifiants.
+    Contient un lien vers "Mot de passe oublié".
+    Contient un lien vers "S'inscrire".
+
+E04 — Mot de passe oublié
+    Écran d'aide pour les utilisateurs qui ont oublié leur mot de passe.
+    Demande le matricule et affiche les instructions pour contacter l'admin.
+    Envoie une confirmation après soumission.
+
+E05 — Première connexion
+    Affiché uniquement si le compte a été créé par un admin
+    avec un mot de passe provisoire.
+    Permet à l'utilisateur de créer son propre mot de passe personnel.
+    S'affiche une seule fois, puis redirige vers le Dashboard.
+
+----------------------------------------------------------------
+                    INSCRIPTION (nouveaux — E33 à E36)
+----------------------------------------------------------------
+
+E33 — Sélection du statut
+    Page d'entrée unique pour toute inscription.
+    L'utilisateur choisit son profil : Étudiant / Enseignant / Administration.
+    Redirige vers le formulaire correspondant selon le choix.
+
+E34 — Inscription Étudiant
+    Formulaire d'inscription pour les étudiants.
+    Champs : nom, prénom, matricule, sexe, filière (ISN/CDN/INS),
+             promotion (L1 à M2), mot de passe, confirmation.
+    Compte activé immédiatement après soumission.
+
+E35 — Inscription Enseignant
+    Formulaire d'inscription pour les enseignants.
+    Champs : nom, prénom, matricule enseignant, spécialité,
+             code de vérification enseignant (secret), mot de passe, confirmation.
+    Compte en attente de validation admin avant activation.
+
+E36 — Inscription Administration
+    Formulaire d'inscription pour le personnel administratif.
+    Champs : nom, prénom, fonction, code administrateur (secret direction),
+             mot de passe, confirmation.
+    Même logique de validation que l'enseignant.
+
+----------------------------------------------------------------
+                    RÔLE ÉTUDIANT (E06 à E22)
+----------------------------------------------------------------
+
+E06 — Dashboard Étudiant
+    Page d'accueil principale de l'étudiant après connexion.
+    Affiche : salutation, prochain cours, derniers communiqués, notes récentes.
+    Indique le nombre d'absences avec alerte si seuil proche.
+    Contient la barre de navigation basse (5 onglets).
+
+E07 — Liste des communiqués
+    Liste chronologique de tous les communiqués officiels.
+    Chaque item affiche : titre, date, badge (Urgent/Info/Général).
+    Indique les communiqués non lus.
+    Filtre par catégorie disponible.
+
+E08 — Détail d'un communiqué
+    Affiche le contenu complet d'un communiqué sélectionné.
+    Montre : titre, date, auteur, corps du texte, pièce jointe si applicable.
+    Bouton retour vers la liste.
+
+E09 — Bibliothèque de cours
+    Liste toutes les matières du semestre actif.
+    Sélecteur de semestre en haut (S1 / S2).
+    Indique le nombre de documents disponibles par matière.
+    Badge "Nouveau" si un document a été récemment ajouté.
+
+E10 — Documents d'une matière
+    Liste tous les fichiers disponibles pour une matière choisie.
+    Chaque fichier : titre, date, taille, type (Cours/TD/TP/Exam).
+    Boutons pour lire ou télécharger en mode offline.
+
+E11 — Visionneuse PDF
+    Lecteur PDF intégré en plein écran.
+    Navigation page par page, zoom supporté.
+    Bouton pour télécharger le document en offline.
+    Indicateur page actuelle / total pages.
+
+E12 — Mes notes
+    Affiche toutes les notes de l'étudiant par semestre.
+    Carte "Moyenne générale" bien visible en haut.
+    Code couleur : vert (validé) / orange (moyen) / rouge (insuffisant).
+    Tap sur une matière → Détail de la note.
+
+E13 — Détail d'une note
+    Détail complet d'une note pour une matière.
+    Affiche : note obtenue, note max, coefficient, commentaire du prof, date.
+
+E14 — Mes absences
+    Résumé global des absences avec barre de progression visuelle.
+    Liste par matière avec nombre d'absences et seuil maximum.
+    Alerte rouge si le seuil critique est atteint dans une matière.
+
+E15 — Emploi du temps
+    Vue semaine de l'emploi du temps (Lundi → Vendredi).
+    Navigation entre semaines (précédente / suivante).
+    Chaque cours affiché avec matière, salle, enseignant.
+    Cours actuel mis en surbrillance. Fonctionne hors-ligne.
+
+E16 — Détail d'un créneau
+    Détail complet d'un cours dans l'emploi du temps.
+    Affiche : matière, enseignant, salle, horaire, type de séance.
+    Indique le statut : Normal / Annulé / Reporté.
+
+E17 — Annuaire campus
+    Répertoire de tous les contacts de l'université.
+    Filtres : Enseignants / Délégués / Administration.
+    Barre de recherche par nom ou matière.
+
+E18 — Fiche contact
+    Détail complet d'un contact de l'annuaire.
+    Affiche : photo/avatar, nom, fonction, matières (si prof),
+              email, numéro de bureau, disponibilités.
+
+E19 — Mon profil
+    Profil personnel de l'étudiant connecté.
+    Affiche : matricule, filière, niveau, année d'inscription.
+    Statistiques rapides : cours téléchargés, absences totales.
+    Bouton "Se déconnecter".
+
+E20 — Paramètres
+    Gestion des préférences de l'application.
+    Toggles pour les notifications (globales, communiqués, notes, EDT).
+    Gestion du cache offline (voir taille, vider).
+    Version de l'app et mentions légales.
+
+E21 — Mode hors-ligne
+    Bannière affichée quand l'app est utilisée sans internet.
+    Montre les données disponibles en cache (cours, EDT, notes).
+    Sections non disponibles grisées.
+    Bouton "Synchroniser" dès que la connexion revient.
+
+E22 — État vide (liste vide)
+    Écran/widget affiché quand une liste ne contient aucune donnée.
+    Message contextuel selon la section ("Aucun cours", "Aucun communiqué"...).
+    Bouton "Actualiser" ou "Retour" selon le contexte.
+    Réutilisé sur toutes les sections de l'app.
+
+----------------------------------------------------------------
+                    RÔLE ENSEIGNANT (E23 à E27)
+----------------------------------------------------------------
+
+E23 — Dashboard Enseignant
+    Page d'accueil de l'enseignant après connexion.
+    Affiche ses matières et les actions rapides disponibles.
+    Résumé : nombre de cours uploadés, dernière mise à jour EDT.
+
+E24 — Uploader un cours
+    Formulaire pour publier un nouveau document de cours.
+    Champs : matière, type (Cours/TD/TP/Exam), titre, fichier.
+    Barre de progression pendant l'upload.
+    Notification automatique envoyée aux étudiants après publication.
+
+E25 — Saisir les notes
+    Formulaire de saisie des notes pour une évaluation donnée.
+    Liste tous les étudiants de la filière avec champ note individuel.
+    Calcul automatique de la moyenne de classe.
+    Bouton "Enregistrer et publier" notifie tous les étudiants.
+
+E26 — Saisir les absences
+    Feuille d'appel numérique pour une séance.
+    Toggle Présent/Absent pour chaque étudiant.
+    Compteur présents/absents en temps réel.
+    Option "Marquer tous présents" pour aller plus vite.
+
+E27 — Mettre à jour l'EDT
+    Permet à l'enseignant de modifier ses créneaux.
+    Modification possible : salle, horaire, statut (annulé/reporté).
+    Notification automatique envoyée aux étudiants concernés.
+
+----------------------------------------------------------------
+                    RÔLE ADMINISTRATEUR (E28 à E32)
+----------------------------------------------------------------
+
+E28 — Dashboard Admin
+    Vue globale de l'activité de l'université.
+    Statistiques : nb étudiants actifs, nb profs, nb communiqués publiés.
+    Fil des dernières activités (qui a fait quoi et quand).
+    Indicateur de santé du système Firebase.
+
+E29 — Créer un communiqué
+    Formulaire de création d'un communiqué officiel.
+    Champs : titre, catégorie, corps du texte, ciblage, pièce jointe.
+    Publication envoie immédiatement une notification push à tous les ciblés.
+
+E30 — Gérer les communiqués
+    Liste de tous les communiqués publiés avec statut.
+    Actions disponibles : modifier, archiver, supprimer.
+    Filtre par catégorie ou par date.
+
+E31 — Gestion des utilisateurs
+    Liste de tous les comptes de l'application.
+    Recherche par nom ou matricule. Filtre par rôle.
+    Actions : voir profil, modifier rôle, désactiver compte.
+    Accès à la validation des comptes enseignants et admins en attente.
+
+E32 — Ajouter un utilisateur (création manuelle)
+    Formulaire de création manuelle d'un compte par l'administrateur.
+    Champs selon le rôle : matricule, nom, rôle, filière/matières.
+    Mot de passe provisoire généré automatiquement.
+    Compte actif immédiatement après création.
+
+================================================================
+    FLOW DE NAVIGATION PRINCIPAL
+================================================================
+
+    Lancement app
+        └── E01 Splash Screen
+                ├── (déjà connecté) → Dashboard selon rôle
+                └── (non connecté)  → E02 Onboarding (1er lancement)
+                                          └── E03 Connexion
+                                                  ├── E04 Mot de passe oublié
+                                                  ├── E05 Première connexion
+                                                  └── S'inscrire
+                                                          └── E33 Sélection statut
+                                                                  ├── E34 Inscription Étudiant
+                                                                  ├── E35 Inscription Enseignant
+                                                                  └── E36 Inscription Admin
+
+================================================================
+    Acadify · Phase 1 MVP · 36 écrans · Flutter · Firebase
+    Codify · UIECC Sangmélima · 2026
+================================================================

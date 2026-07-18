@@ -1,9 +1,74 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../shared/widgets/custom_navigation_bar.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/models/course_model.dart';
 
-class TeacherDashboard extends StatelessWidget {
+class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});
+
+  @override
+  State<TeacherDashboard> createState() => _TeacherDashboardState();
+}
+
+class _TeacherDashboardState extends State<TeacherDashboard> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  String _userName = 'Professeur';
+  String? _specialite;
+  bool _isLoading = true;
+  bool _isPending = false;
+  
+  List<CourseModel> _myCourses = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllData();
+  }
+
+  Future<void> _loadAllData() async {
+    _loadUserData();
+    await _fetchTeacherStats();
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _loadUserData() {
+    var userBox = Hive.box('userBox');
+    setState(() {
+      _userName = userBox.get('name', defaultValue: 'Professeur');
+      _specialite = userBox.get('filiere'); // On utilise filiere pour la spécialité
+    });
+  }
+
+  Future<void> _fetchTeacherStats() async {
+    var userBox = Hive.box('userBox');
+    String? uid = userBox.get('uid');
+    if (uid == null) return;
+
+    try {
+      // 1. Vérifier le statut du compte
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        String status = userDoc.get('status') ?? 'active';
+        _isPending = status == 'pending';
+      }
+
+      // 2. Récupérer les cours du prof
+      var coursesSnapshot = await _firestore
+          .collection('courses')
+          .where('teacherId', isEqualTo: uid)
+          .get();
+      
+      _myCourses = coursesSnapshot.docs
+          .map((doc) => CourseModel.fromMap(doc.data(), doc.id))
+          .toList();
+      
+      // Pour chaque cours, on pourrait compter les documents dans la sous-collection
+      // Pour simplifier on affiche juste le nombre de cours
+    } catch (e) {
+      debugPrint('Error fetching teacher stats: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,37 +82,53 @@ class TeacherDashboard extends StatelessWidget {
           _buildAppBar(context),
           Positioned.fill(
             top: 80,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  Text('Gérez vos activités académiques', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 24),
-                  _buildHeroCourseCard(context),
-                  const SizedBox(height: 32),
-                  _buildQuickActions(context),
-                  const SizedBox(height: 32),
-                  _buildCourseManagement(context),
-                  const SizedBox(height: 32),
-                  _buildRecentActivity(context),
-                  const SizedBox(height: 32),
-                  _buildStatistics(context),
-                  const SizedBox(height: 120),
-                ],
+            child: RefreshIndicator(
+              onRefresh: _loadAllData,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    if (_isPending) _buildPendingAlert(context),
+                    Text('Gérez vos activités académiques', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 24),
+                    _buildHeroCourseCard(context),
+                    const SizedBox(height: 32),
+                    _buildQuickActions(context),
+                    const SizedBox(height: 32),
+                    _buildCourseManagement(context),
+                    const SizedBox(height: 32),
+                    _buildStatistics(context),
+                    const SizedBox(height: 120),
+                  ],
+                ),
               ),
             ),
           ),
-          CustomNavigationBar(
-            currentIndex: 0,
-            items: [
-              CustomBottomNavItem(icon: Icons.dashboard, label: 'Dashboard', onTap: () {}),
-              CustomBottomNavItem(icon: Icons.menu_book, label: 'Cours', onTap: () => context.push('/teacher-courses')),
-              CustomBottomNavItem(icon: Icons.group, label: 'Étudiants', onTap: () {}),
-              CustomBottomNavItem(icon: Icons.calendar_today, label: 'Planning', onTap: () => context.push('/teacher-schedule')),
-              CustomBottomNavItem(icon: Icons.person, label: 'Profil', onTap: () => context.push('/teacher-profile')),
-            ],
+        ],
+      ),
+    );
+  }
+
+                  Widget _buildPendingAlert(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Compte en attente de validation par l\'administration.',
+              style: TextStyle(color: Colors.amber[800], fontWeight: FontWeight.bold, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -57,6 +138,8 @@ class TeacherDashboard extends StatelessWidget {
   Widget _buildAppBar(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    String firstName = _userName.split(' ').first;
+
     return Positioned(
       top: 0,
       left: 0,
@@ -72,16 +155,19 @@ class TeacherDashboard extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.2),
                   border: Border.all(color: colorScheme.primaryContainer, width: 2),
-                  image: const DecorationImage(
-                    image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuCOPlRypfb2Rh6JEyUcYo1rXP10avrFjYbPK2e4m9RPCIrMKTA4hU6P8Kc2IVKyiptBnlEGZZdbiejYo752OoAXvTNMracDVRiyaRV-5GWXQkjAXxuAoV61_KyljJ90XjVsoXqodjQ56lw2ebrH-3Ql2c6zAcUCNgqB-m7g0IAgEsv6QlAv6tFjBLuCdqZWBMhiVJXsQ5yuq6c6Ki2WheI24aQhKPbnGoVMMikeejdlKyUygbf7NfANyaFDyUGOSpnI9259_tcjVYr8'),
-                    fit: BoxFit.cover,
+                ),
+                child: Center(
+                  child: Text(
+                    _userName.isNotEmpty ? _userName[0].toUpperCase() : 'P',
+                    style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Text(
-                'Bonjour Professeur 👋',
+                'Bonjour, $firstName 👋',
                 style: theme.textTheme.headlineMedium?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
@@ -125,7 +211,7 @@ class TeacherDashboard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'Prochain cours dans 15 min',
+                  'Spécialité : ${_specialite ?? "Non définie"}',
                   style: theme.textTheme.labelMedium?.copyWith(color: Colors.white, fontSize: 10),
                 ),
               ),
@@ -134,17 +220,16 @@ class TeacherDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'Algorithmique & Structures de Données',
-            style: theme.textTheme.headlineLarge?.copyWith(color: Colors.white, fontSize: 28),
+            _myCourses.isNotEmpty ? _myCourses.first.name : 'Aucun cours assigné',
+            style: theme.textTheme.headlineLarge?.copyWith(color: Colors.white, fontSize: 24),
           ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 16,
             runSpacing: 8,
             children: [
-              _buildHeroInfoItem(Icons.schedule, '10:30 - 12:30'),
-              _buildHeroInfoItem(Icons.location_on, 'Amphi B, Bloc C'),
-              _buildHeroInfoItem(Icons.groups, '142 Étudiants'),
+              _buildHeroInfoItem(Icons.class_, '${_myCourses.length} Matières'),
+              _buildHeroInfoItem(Icons.assignment_ind, 'Enseignant Certifié'),
             ],
           ),
         ],
@@ -178,10 +263,10 @@ class TeacherDashboard extends StatelessWidget {
           crossAxisSpacing: 12,
           childAspectRatio: 1.3,
           children: [
-            _buildActionCard(context, Icons.add_circle, 'Ajouter un cours', () => context.push('/teacher-upload-course')),
-            _buildActionCard(context, Icons.grading, 'Publier une note', () => context.push('/teacher-grade-entry')),
-            _buildActionCard(context, Icons.campaign, 'Envoyer un communiqué', () {}),
-            _buildActionCard(context, Icons.upload_file, 'Télécharger document', () {}),
+            _buildActionCard(context, Icons.add_circle, 'Uploader un cours', () => context.push('/teacher-upload-course')),
+            _buildActionCard(context, Icons.grading, 'Saisir les notes', () => context.push('/teacher-grade-entry')),
+            _buildActionCard(context, Icons.how_to_reg, 'Faire l\'appel', () => context.push('/teacher-attendance')),
+            _buildActionCard(context, Icons.calendar_month, 'Gérer l\'EDT', () => context.push('/teacher-schedule')),
           ],
         ),
       ],
@@ -227,7 +312,7 @@ class TeacherDashboard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Vos Cours', style: theme.textTheme.headlineMedium),
+            Text('Vos Matières', style: theme.textTheme.headlineMedium),
             TextButton(
               onPressed: () => context.push('/teacher-courses'),
               child: Text('Tout voir', style: theme.textTheme.labelMedium?.copyWith(color: colorScheme.primary)),
@@ -235,14 +320,23 @@ class TeacherDashboard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _buildTeacherCourseCard(context, 'Systèmes d\'Information', 'Informatique', '85', '12', colorScheme.primary),
-        const SizedBox(height: 12),
-        _buildTeacherCourseCard(context, 'Réseaux Mobiles', 'Télécoms', '64', '8', colorScheme.secondaryContainer),
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_myCourses.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Text('Aucune matière enregistrée pour le moment.'),
+          )
+        else
+          ..._myCourses.take(2).map((course) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildTeacherCourseCard(context, course.name, course.filiere, 'S${course.semester}', colorScheme.primary),
+          )),
       ],
     );
   }
 
-  Widget _buildTeacherCourseCard(BuildContext context, String title, String dept, String students, String docs, Color color) {
+  Widget _buildTeacherCourseCard(BuildContext context, String title, String dept, String semester, Color color) {
     final colorScheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
     return Container(
@@ -252,94 +346,19 @@ class TeacherDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border(left: BorderSide(color: color, width: 4)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  Text(dept, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
-                ],
-              ),
-              Icon(Icons.more_vert, color: colorScheme.onSurfaceVariant),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildCourseStat(context, Icons.group, '$students Étudiants', colorScheme.primary),
-              const SizedBox(width: 24),
-              _buildCourseStat(context, Icons.description, '$docs Documents', colorScheme.onSurfaceVariant),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCourseStat(BuildContext context, IconData icon, String text, Color color) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 4),
-        Text(text, style: theme.textTheme.labelMedium?.copyWith(color: color, fontSize: 10)),
-      ],
-    );
-  }
-
-  Widget _buildRecentActivity(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Activité Récente', style: theme.textTheme.headlineMedium),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
-          ),
-          child: Column(
-            children: [
-              _buildActivityItem(context, Icons.task, 'Nouvelle soumission: Devoir 2 - Algorithmique', 'il y a 2m', colorScheme.primary),
-              Divider(color: colorScheme.onSurface.withValues(alpha: 0.1), height: 1),
-              _buildActivityItem(context, Icons.picture_as_pdf, 'Document partagé: Support_Cours_V3.pdf', 'il y a 1h', colorScheme.secondaryContainer),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActivityItem(BuildContext context, IconData icon, String text, String time, Color color) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(16),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: theme.textTheme.bodyMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(time, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+                Text(title, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+                Text('$dept - Semestre $semester', style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
               ],
             ),
           ),
+          Icon(Icons.arrow_forward_ios, size: 16, color: colorScheme.onSurfaceVariant),
         ],
       ),
     );
@@ -357,13 +376,9 @@ class TeacherDashboard extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildStatBox(context, 'Cours', '4', colorScheme.primary),
+              _buildStatBox(context, 'Matières', '${_myCourses.length}', colorScheme.primary),
               const SizedBox(width: 12),
-              _buildStatBox(context, 'Documents', '28', colorScheme.primary),
-              const SizedBox(width: 12),
-              _buildStatBox(context, 'Présence', '92%', colorScheme.primary),
-              const SizedBox(width: 12),
-              _buildStatBox(context, 'Évaluations', '3', colorScheme.primary, subtitle: 'en attente'),
+              _buildStatBox(context, 'En attente', '0', colorScheme.primary, subtitle: 'évaluations'),
             ],
           ),
         ),

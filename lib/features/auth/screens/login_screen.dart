@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/models/user_model.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,22 +15,53 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _matriculeController = TextEditingController();
   final _emailController = TextEditingController();
+  final _matriculeController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    _matriculeController.dispose();
     _emailController.dispose();
+    _matriculeController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      context.go('/student-dashboard');
+      setState(() => _isLoading = true);
+      try {
+        UserModel? user = await _authService.signIn(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+
+        if (user != null && mounted) {
+          if (user.forcePasswordChange) {
+            context.go('/first-login');
+          } else {
+            // Redirection selon le rôle
+            if (user.role == UserRole.student) {
+              context.go('/student-dashboard');
+            } else if (user.role == UserRole.teacher) {
+              context.go('/teacher-dashboard');
+            } else if (user.role == UserRole.admin) {
+              context.go('/admin-dashboard');
+            }
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur : ${e.toString()}')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -131,6 +164,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _buildLabel(context, 'EMAIL'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _emailController,
+                            style: textTheme.bodyMedium,
+                            decoration: const InputDecoration(
+                              hintText: 'votre@email.com',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                            validator: Validators.validateEmail,
+                          ),
+                          const SizedBox(height: 24),
                           _buildLabel(context, 'MATRICULE'),
                           const SizedBox(height: 8),
                           TextFormField(
@@ -141,19 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               prefixIcon: Icon(Icons.badge_outlined),
                             ),
                             validator: Validators.validateMatricule,
-                          ),
-                          const SizedBox(height: 24),
-                          _buildLabel(context, 'ADRESSE EMAIL'),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _emailController,
-                            style: textTheme.bodyMedium,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              hintText: 'votre@email.com',
-                              prefixIcon: Icon(Icons.email_outlined),
-                            ),
-                            validator: Validators.validateEmail,
                           ),
                           const SizedBox(height: 24),
                           _buildLabel(context, 'MOT DE PASSE'),
@@ -194,11 +226,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          PrimaryButton(
-                            text: 'Se connecter',
-                            onPressed: _handleLogin,
-                            suffixIcon: Icons.arrow_forward,
-                          ),
+                          _isLoading 
+                            ? const Center(child: CircularProgressIndicator())
+                            : PrimaryButton(
+                                text: 'Se connecter',
+                                onPressed: _handleLogin,
+                                suffixIcon: Icons.arrow_forward,
+                              ),
                           const SizedBox(height: 16),
                           Center(
                             child: GestureDetector(
