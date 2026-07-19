@@ -238,21 +238,35 @@ class AuthService {
   // Vérifier le code secret (Enseignant ou Admin)
   Future<bool> verifySecretCode(String role, String code) async {
     try {
+      final cleanCode = code.trim().toUpperCase();
+      
+      // Vérification directe avec les codes demandés
+      if (role == 'teacher' && cleanCode == 'PROF2026') {
+        return true;
+      }
+      if (role == 'admin' && cleanCode == 'ADMIN2026') {
+        return true;
+      }
+
+      // Secours : Lecture depuis Firestore
       DocumentSnapshot doc = await _firestore.collection('config').doc('codes').get();
       if (doc.exists) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        final cleanCode = code.trim();
         
         if (role == 'teacher') {
-          final dbCode = data['teacher']?.toString().trim();
+          final dbCode = data['teacher']?.toString().trim().toUpperCase();
           return dbCode == cleanCode;
         } else if (role == 'admin') {
-          final dbCode = data['admin']?.toString().trim();
+          final dbCode = data['admin']?.toString().trim().toUpperCase();
           return dbCode == cleanCode;
         }
       }
       return false;
     } catch (e) {
+      // En cas de problème réseau, on valide quand même si le code saisi est le bon code physique
+      final cleanCode = code.trim().toUpperCase();
+      if (role == 'teacher' && cleanCode == 'PROF2026') return true;
+      if (role == 'admin' && cleanCode == 'ADMIN2026') return true;
       return false;
     }
   }
