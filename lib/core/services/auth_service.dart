@@ -241,10 +241,14 @@ class AuthService {
       DocumentSnapshot doc = await _firestore.collection('config').doc('codes').get();
       if (doc.exists) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        final cleanCode = code.trim();
+        
         if (role == 'teacher') {
-          return data['teacher'] == code;
+          final dbCode = data['teacher']?.toString().trim();
+          return dbCode == cleanCode;
         } else if (role == 'admin') {
-          return data['admin'] == code;
+          final dbCode = data['admin']?.toString().trim();
+          return dbCode == cleanCode;
         }
       }
       return false;
