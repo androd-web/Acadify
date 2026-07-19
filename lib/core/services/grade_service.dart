@@ -23,6 +23,20 @@ class GradeService {
     });
   }
 
+  /// Récupérer toutes les notes saisies par un enseignant spécifique (via collectionGroup)
+  Stream<List<GradeModel>> getGradesByTeacher({required String teacherName}) {
+    return _firestore
+        .collectionGroup('grades')
+        .where('teacherName', isEqualTo: teacherName)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return GradeModel.fromMap(doc.data(), doc.id);
+      }).toList()
+        ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    });
+  }
+
   /// Publier ou mettre à jour la note d'un étudiant (Enseignant)
   Future<bool> publishGrade({
     required String studentUid,

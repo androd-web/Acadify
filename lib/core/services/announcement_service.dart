@@ -30,6 +30,20 @@ class AnnouncementService {
     });
   }
 
+  /// Récupérer les communiqués créés par un auteur spécifique (Enseignant/Admin)
+  Stream<List<AnnouncementModel>> getAnnouncementsByAuthor(String authorUid) {
+    return _firestore
+        .collection('announcements')
+        .where('authorUid', isEqualTo: authorUid)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return AnnouncementModel.fromMap(doc.data(), doc.id);
+      }).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    });
+  }
+
   /// Créer un nouveau communiqué (Admin ou Enseignant autorisé)
   Future<bool> createAnnouncement({
     required String title,

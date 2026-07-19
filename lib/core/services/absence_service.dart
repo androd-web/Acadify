@@ -18,6 +18,23 @@ class AbsenceService {
     });
   }
 
+  /// Récupérer les absences d'un étudiant pour une matière spécifique
+  Stream<AbsenceModel?> getStudentAbsenceForSubject({
+    required String studentUid,
+    required String subjectId,
+  }) {
+    return _firestore
+        .collection('users')
+        .doc(studentUid)
+        .collection('absences')
+        .doc(subjectId)
+        .snapshots()
+        .map((doc) {
+      if (!doc.exists || doc.data() == null) return null;
+      return AbsenceModel.fromMap(doc.data()!, doc.id);
+    });
+  }
+
   /// Enregistrer une nouvelle absence pour un étudiant dans une matière
   Future<bool> recordAbsence({
     required String studentUid,
