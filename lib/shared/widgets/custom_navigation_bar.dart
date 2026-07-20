@@ -101,15 +101,22 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> with SingleTi
                           Icon(
                             item.icon,
                             color: isSelected ? AppColors.primary : colorScheme.onSurfaceVariant,
-                            size: 26,
+                            size: 24, // Légèrement réduit pour éviter les overflows
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item.label,
-                            style: TextStyle(
-                              color: isSelected ? AppColors.primary : colorScheme.onSurfaceVariant,
-                              fontSize: 11,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          const SizedBox(height: 2),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: isSelected ? AppColors.primary : colorScheme.onSurfaceVariant,
+                                  fontSize: 10,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
                             ),
                           ),
                         ],
