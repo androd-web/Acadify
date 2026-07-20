@@ -24,7 +24,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     if (location.startsWith('/grades') || location.startsWith('/teacher-grade-entry') || location.startsWith('/admin-users')) {
       return 2;
     }
-    if (location.startsWith('/schedule') || location.startsWith('/teacher-schedule')) {
+    if (location.startsWith('/schedule') || location.startsWith('/teacher-schedule') || location.startsWith('/settings')) {
       return 3;
     }
     if (location.startsWith('/profile') || location.startsWith('/teacher-profile') || location.startsWith('/admin-profile')) {
@@ -58,7 +58,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           case 0: context.go('/admin-dashboard'); break;
           case 1: context.go('/admin-announcements'); break;
           case 2: context.go('/admin-users'); break;
-          case 3: context.go('/admin-dashboard'); break; // Pas encore de 4ème pour admin?
+          case 3: context.go('/settings'); break;
           case 4: context.go('/admin-profile'); break;
         }
         break;
