@@ -77,6 +77,9 @@ final appRouter = GoRouter(
         GoRoute(path: '/admin-dashboard', builder: (context, state) => const AdminDashboard()),
         GoRoute(path: '/admin-announcements', builder: (context, state) => const AdminAnnouncementManagement()),
         GoRoute(path: '/admin-users', builder: (context, state) => const AdminUsersScreen()),
+        
+        // Shared Routes inside Shell (to keep Nav Bar)
+        GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       ],
     ),
 
@@ -93,7 +96,6 @@ final appRouter = GoRouter(
     GoRoute(path: '/pdf-viewer-old', builder: (context, state) => const PdfViewerScreen(doc: {})),
     GoRoute(path: '/grade-detail', builder: (context, state) => const GradeDetailScreen()),
     GoRoute(path: '/schedule-detail', builder: (context, state) => const ScheduleDetailScreen()),
-    GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
     GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
     GoRoute(path: '/offline', builder: (context, state) => const OfflineScreen()),
     GoRoute(path: '/offline-storage', builder: (context, state) => const OfflineStorageScreen()),
@@ -104,4 +106,3 @@ final appRouter = GoRouter(
     GoRoute(path: '/admin-add-user', builder: (context, state) => const AdminAddUserScreen()),
   ],
 );
-
