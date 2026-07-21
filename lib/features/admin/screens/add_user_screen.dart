@@ -52,12 +52,11 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                   _buildStatusSection(context),
                   const SizedBox(height: 48),
                   _buildActionButtons(context),
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
           ),
-          _buildBottomNavBar(context),
         ],
       ),
     );
@@ -105,6 +104,10 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                 icon: const Icon(Icons.save, color: AppColors.amber),
                 onPressed: () {
                   // Lors de la sauvegarde, la date de création (createdAt) sera automatiquement DateTime.now()
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Utilisateur enregistré avec succès !')),
+                  );
+                  context.pop();
                 },
               ),
             ],
@@ -432,7 +435,11 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.content_copy, color: AppColors.amber),
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Mot de passe copié !')),
+                    );
+                  },
                 ),
               ],
             ),
@@ -503,7 +510,10 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: () {
-              // Lors de la création du compte, la date de création (createdAt) sera automatiquement DateTime.now()
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Compte créé avec succès !')),
+              );
+              context.pop();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primaryContainer,
@@ -523,52 +533,6 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               'Annuler',
               style: AppTextStyles.bodyLarge.copyWith(color: colorScheme.onSurfaceVariant),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomNavBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainer,
-          border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildBottomNavItem(context, Icons.dashboard, 'Dashboard', false),
-            _buildBottomNavItem(context, Icons.notifications, 'Alertes', false),
-            _buildBottomNavItem(context, Icons.group, 'Users', true),
-            _buildBottomNavItem(context, Icons.analytics, 'Stats', false),
-            _buildBottomNavItem(context, Icons.account_circle, 'Profil', false),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavItem(BuildContext context, IconData icon, String label, bool isActive) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          icon,
-          color: isActive ? AppColors.amber : colorScheme.onSurfaceVariant,
-        ),
-        Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: isActive ? AppColors.amber : colorScheme.onSurfaceVariant,
-            fontSize: 10,
           ),
         ),
       ],
