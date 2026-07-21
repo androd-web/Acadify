@@ -188,7 +188,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Widget _buildHeader() {
     return Column(
-      cross CrossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Gestion des utilisateurs', style: AppTextStyles.headlineLarge),
         Text(
