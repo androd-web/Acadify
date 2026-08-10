@@ -41,6 +41,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _fetchStats() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       // Récupération dynamique des données depuis Firestore
       final studentsQuery = await _firestore
@@ -61,8 +66,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .collection('courses')
           .get();
 
-      // Récupérer les activités récentes dynamiquement (les 2 derniers communiqués)
+      // Récupérer les activités récentes dynamiquement
       List<Map<String, dynamic>> tempActivities = [];
+
+      // 1. Récupérer les 2 derniers communiqués
       try {
         final recentAnnouncements = await _firestore
             .collection('announcements')
@@ -73,18 +80,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
         for (var doc in recentAnnouncements.docs) {
           final data = doc.data();
           final title = data['title'] ?? 'Nouveau communiqué';
+          final createdAt = data['createdAt'] as Timestamp?;
           tempActivities.add({
             'icon': Icons.campaign,
             'text': 'Communiqué : $title',
-            'time': 'Récemment',
+            'time': createdAt != null ? _formatTimestamp(createdAt) : 'Récemment',
             'color': const Color(0xFFFFB300),
+            'timestamp': createdAt ?? Timestamp.now(),
           });
         }
       } catch (e) {
         debugPrint("Erreur lors du fetch des communiqués récents: $e");
       }
 
-      // Fallback si Firestore n'a pas encore d'activités pour que l'écran ne soit pas vide
+      // 2. Récupérer les 2 derniers utilisateurs créés
+      try {
+        final recentUsers = await _firestore
+            .collection('users')
+            .limit(2)
+            .get(); // On prend les premiers disponibles si pas de champ de date de création
+
+        for (var doc in recentUsers.docs) {
+          final data = doc.data();
+          final name = data['name'] ?? 'Utilisateur';
+          final role = data['role'] == 'teacher' ? 'Enseignant' : 'Étudiant';
+          tempActivities.add({
+            'icon': Icons.person_add,
+            'text': 'Nouvel inscrit ($role) : $name',
+            'time': 'Actif',
+            'color': AppColors.secondary,
+            'timestamp': Timestamp.now(),
+          });
+        }
+      } catch (e) {
+        debugPrint("Erreur lors du fetch des utilisateurs récents: $e");
+      }
+
+      // Trier les activités pour avoir un rendu propre
       if (tempActivities.isEmpty) {
         tempActivities = [
           {
@@ -119,6 +151,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  String _formatTimestamp(Timestamp timestamp) {
+    final difference = DateTime.now().difference(timestamp.toDate());
+    if (difference.inMinutes < 60) {
+      return 'Il y a ${difference.inMinutes} min';
+    } else if (difference.inHours < 24) {
+      return 'Il y a ${difference.inHours} h';
+    } else {
+      return 'Il y a ${difference.inDays} jours';
     }
   }
 
@@ -277,7 +320,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: 1.45, // Ratio augmenté pour éviter les overflows verticaux
+      childAspectRatio: 1.45,
       children: [
         _buildKPICard(
           context, 
@@ -326,7 +369,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween, // Évite l'utilisation de Spacer() risqué
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -399,7 +442,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 1.6, // Ratio augmenté pour éviter les overflows
+          childAspectRatio: 1.6,
           children: [
             _buildActionItem(context, Icons.post_add, 'Nouveau communiqué', colorScheme.primary, () => context.push('/admin-compose-announcement')),
             _buildActionItem(context, Icons.person_add, 'Ajouter utilisateur', colorScheme.secondary, () => context.push('/admin-add-user')),
@@ -533,17 +576,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
           ),
-          child: Column(
-            children: _dynamicActivities.map((activity) {
-              return _buildActivityItem(
-                context, 
-                activity['icon'] as IconData, 
-                activity['text'] as String, 
-                activity['time'] as String, 
-                activity['color'] as Color
-              );
-            }).toList(),
-          ),
+          child: _isLoading 
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: _dynamicActivities.map((activity) {
+                    return _buildActivityItem(
+                      context, 
+                      activity['icon'] as IconData, 
+                      activity['text'] as String, 
+                      activity['time'] as String, 
+                      activity['color'] as Color
+                    );
+                  }).toList(),
+                ),
         ),
       ],
     );
