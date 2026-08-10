@@ -495,11 +495,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _buildActionItem(context, Icons.post_add, 'Nouveau communiqué', colorScheme.primary, () => context.push('/admin-compose-announcement')),
             _buildActionItem(context, Icons.person_add, 'Ajouter utilisateur', colorScheme.secondary, () => context.push('/admin-add-user')),
             _buildActionItem(context, Icons.manage_accounts, 'Gérer communiqués', const Color(0xFFFFB300), () => context.push('/admin-announcements')),
-            _buildActionItem(context, Icons.group_work, 'Gérer utilisateurs', colorScheme.onSurfaceVariant, () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Redirection vers l\'onglet Utilisateurs...')),
-              );
-            }),
+            _buildActionItem(context, Icons.group_work, 'Gérer utilisateurs', colorScheme.onSurfaceVariant, () => context.push('/admin-users')),
           ],
         ),
       ],
