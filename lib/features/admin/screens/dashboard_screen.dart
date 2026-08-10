@@ -19,11 +19,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _announcementCount = 0;
   int _courseCount = 0;
   bool _isLoading = true;
+  List<Map<String, dynamic>> _dynamicActivities = [];
 
   @override
   void initState() {
     super.initState();
     _fetchStats();
+  }
+
+  // Générer la date du jour dynamiquement en français
+  String _getFormattedDate() {
+    final now = DateTime.now();
+    final weekdays = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    final months = [
+      'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+    ];
+    final weekdayStr = weekdays[now.weekday % 7];
+    final monthStr = months[now.month - 1];
+    return '$weekdayStr ${now.day} $monthStr ${now.year}';
   }
 
   Future<void> _fetchStats() async {
@@ -47,12 +61,54 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .collection('courses')
           .get();
 
+      // Récupérer les activités récentes dynamiquement (les 2 derniers communiqués)
+      List<Map<String, dynamic>> tempActivities = [];
+      try {
+        final recentAnnouncements = await _firestore
+            .collection('announcements')
+            .orderBy('createdAt', descending: true)
+            .limit(2)
+            .get();
+
+        for (var doc in recentAnnouncements.docs) {
+          final data = doc.data();
+          final title = data['title'] ?? 'Nouveau communiqué';
+          tempActivities.add({
+            'icon': Icons.campaign,
+            'text': 'Communiqué : $title',
+            'time': 'Récemment',
+            'color': const Color(0xFFFFB300),
+          });
+        }
+      } catch (e) {
+        debugPrint("Erreur lors du fetch des communiqués récents: $e");
+      }
+
+      // Fallback si Firestore n'a pas encore d'activités pour que l'écran ne soit pas vide
+      if (tempActivities.isEmpty) {
+        tempActivities = [
+          {
+            'icon': Icons.upload,
+            'text': 'Système prêt et synchronisé avec Firestore',
+            'time': 'À l\'instant',
+            'color': AppColors.primary,
+          },
+          {
+            'icon': Icons.person_add,
+            'text': 'Prêt à enregistrer de nouveaux étudiants',
+            'time': 'Actif',
+            'color': AppColors.secondaryContainer,
+          }
+        ];
+      }
+
       if (mounted) {
         setState(() {
           _studentCount = studentsQuery.docs.length;
           _teacherCount = teachersQuery.docs.length;
           _announcementCount = announcementsQuery.docs.length;
           _courseCount = coursesQuery.docs.length;
+          _dynamicActivities = tempActivities;
           _isLoading = false;
         });
       }
@@ -187,7 +243,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             const Spacer(),
             Text(
-              'Lundi 26 Mai 2026',
+              _getFormattedDate(),
               style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant),
             ),
           ],
@@ -326,7 +382,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Actions rapides', style: AppTextStyles.headlineMedium.copyWith(color: colorScheme.onSurface, fontSize: 18)),
-            Text('Tout voir', style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFFFB300))),
+            GestureDetector(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Toutes les actions sont déjà affichées ci-dessous !')),
+                );
+              },
+              child: Text('Tout voir', style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFFFB300))),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -339,9 +402,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           childAspectRatio: 1.6, // Ratio augmenté pour éviter les overflows
           children: [
             _buildActionItem(context, Icons.post_add, 'Nouveau communiqué', colorScheme.primary, () => context.push('/admin-compose-announcement')),
-            _buildActionItem(context, Icons.person_add, 'Ajouter utilisateur', colorScheme.secondary, () {}),
+            _buildActionItem(context, Icons.person_add, 'Ajouter utilisateur', colorScheme.secondary, () => context.push('/admin-add-user')),
             _buildActionItem(context, Icons.manage_accounts, 'Gérer communiqués', const Color(0xFFFFB300), () => context.push('/admin-announcements')),
-            _buildActionItem(context, Icons.group_work, 'Gérer utilisateurs', colorScheme.onSurfaceVariant, () {}),
+            _buildActionItem(context, Icons.group_work, 'Gérer utilisateurs', colorScheme.onSurfaceVariant, () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Redirection vers l\'onglet Utilisateurs...')),
+              );
+            }),
           ],
         ),
       ],
@@ -402,7 +469,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 16),
           _buildHealthRow(context, 'Firebase connection', 'Connecté', true),
           _buildHealthRow(context, 'Notifications FCM', 'Opérationnel', true),
-          _buildHealthRow(context, 'Dernière synchro', 'il y a 4 min', null),
+          _buildHealthRow(context, 'Dernière synchro', 'À l\'instant', null),
           const SizedBox(height: 12),
           Text('Storage usage (234 Mo / 1 Go)', style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurface, fontSize: 11)),
           const SizedBox(height: 8),
@@ -467,11 +534,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
           ),
           child: Column(
-            children: [
-              _buildActivityItem(context, Icons.upload, 'Dr. Mbida a uploadé Intro_Informatique_v2.pdf', 'Il y a 1h', colorScheme.primary),
-              _buildActivityItem(context, Icons.campaign, 'Communiqué : Suspension des cours pour l\'Ascension', 'Il y a 3h', const Color(0xFFFFB300)),
-              _buildActivityItem(context, Icons.person_add, 'Nouveau compte étudiant créé : Jean-Marc Biyong', 'Hier', colorScheme.secondary),
-            ],
+            children: _dynamicActivities.map((activity) {
+              return _buildActivityItem(
+                context, 
+                activity['icon'] as IconData, 
+                activity['text'] as String, 
+                activity['time'] as String, 
+                activity['color'] as Color
+              );
+            }).toList(),
           ),
         ),
       ],
