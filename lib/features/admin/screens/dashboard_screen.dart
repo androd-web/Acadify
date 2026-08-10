@@ -19,6 +19,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _teacherCount = 0;
   int _announcementCount = 0;
   int _courseCount = 0;
+  int _pendingUsersCount = 0;
   bool _isLoading = true;
   List<Map<String, dynamic>> _dynamicActivities = [];
 
@@ -28,6 +29,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   StreamSubscription? _announcementsSubscription;
   StreamSubscription? _coursesSubscription;
   StreamSubscription? _recentAnnouncementsSubscription;
+  StreamSubscription? _pendingUsersSubscription;
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _announcementsSubscription?.cancel();
     _coursesSubscription?.cancel();
     _recentAnnouncementsSubscription?.cancel();
+    _pendingUsersSubscription?.cancel();
     super.dispose();
   }
 
@@ -118,7 +121,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
       }
     }, onError: (e) => debugPrint("Erreur cours temps réel: $e"));
 
-    // 5. Écouter les activités récentes (les 3 derniers communiqués et utilisateurs)
+    // 5. Écouter les utilisateurs en attente d'approbation (status == pending)
+    _pendingUsersSubscription = _firestore
+        .collection('users')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _pendingUsersCount = snapshot.docs.length;
+          _checkLoadingFinished();
+        });
+      }
+    }, onError: (e) => debugPrint("Erreur pending users temps réel: $e"));
+
+    // 6. Écouter les activités récentes (les 3 derniers communiqués et utilisateurs)
     _recentAnnouncementsSubscription = _firestore
         .collection('announcements')
         .orderBy('createdAt', descending: true)
@@ -209,6 +226,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _announcementsSubscription?.cancel();
     _coursesSubscription?.cancel();
     _recentAnnouncementsSubscription?.cancel();
+    _pendingUsersSubscription?.cancel();
     _initRealtimeListeners();
     await Future.delayed(const Duration(milliseconds: 800));
   }
@@ -234,7 +252,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildGreeting(context),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    _buildPendingAlertBanner(context),
+                    const SizedBox(height: 16),
                     _buildKPIStats(context),
                     const SizedBox(height: 24),
                     _buildQuickActions(context),
@@ -356,6 +376,54 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildPendingAlertBanner(BuildContext context) {
+    if (_pendingUsersCount == 0) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => context.push('/admin-users'),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.4), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.gpp_maybe, color: Colors.orange, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Validation requise',
+                    style: AppTextStyles.headlineMedium.copyWith(
+                      color: Colors.orange,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Il y a $_pendingUsersCount compte(s) en attente d\'approbation.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: colorScheme.onSurface,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.orange, size: 16),
+          ],
+        ),
+      ),
     );
   }
 
