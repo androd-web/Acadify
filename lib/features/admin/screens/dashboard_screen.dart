@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,10 +22,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _dynamicActivities = [];
 
+  // Abonnements pour écouter Firestore en temps réel
+  StreamSubscription? _studentsSubscription;
+  StreamSubscription? _teachersSubscription;
+  StreamSubscription? _announcementsSubscription;
+  StreamSubscription? _coursesSubscription;
+  StreamSubscription? _recentAnnouncementsSubscription;
+
   @override
   void initState() {
     super.initState();
-    _fetchStats();
+    _initRealtimeListeners();
+  }
+
+  @override
+  void dispose() {
+    // On libère les abonnements pour éviter les fuites de mémoire, mola
+    _studentsSubscription?.cancel();
+    _teachersSubscription?.cancel();
+    _announcementsSubscription?.cancel();
+    _coursesSubscription?.cancel();
+    _recentAnnouncementsSubscription?.cancel();
+    super.dispose();
   }
 
   // Générer la date du jour dynamiquement en français
@@ -40,65 +59,93 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return '$weekdayStr ${now.day} $monthStr ${now.year}';
   }
 
-  Future<void> _fetchStats() async {
-    if (!mounted) return;
+  void _initRealtimeListeners() {
     setState(() {
       _isLoading = true;
     });
 
-    try {
-      // Récupération dynamique des données depuis Firestore
-      final studentsQuery = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'student')
-          .get();
-          
-      final teachersQuery = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'teacher')
-          .get();
+    // 1. Écouter les étudiants en temps réel
+    _studentsSubscription = _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'student')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _studentCount = snapshot.docs.length;
+          _checkLoadingFinished();
+        });
+      }
+    }, onError: (e) => debugPrint("Erreur étudiants temps réel: $e"));
 
-      final announcementsQuery = await _firestore
-          .collection('announcements')
-          .get();
+    // 2. Écouter les enseignants en temps réel
+    _teachersSubscription = _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'teacher')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _teacherCount = snapshot.docs.length;
+          _checkLoadingFinished();
+        });
+      }
+    }, onError: (e) => debugPrint("Erreur enseignants temps réel: $e"));
 
-      final coursesQuery = await _firestore
-          .collection('courses')
-          .get();
+    // 3. Écouter tous les communiqués en temps réel
+    _announcementsSubscription = _firestore
+        .collection('announcements')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _announcementCount = snapshot.docs.length;
+          _checkLoadingFinished();
+        });
+      }
+    }, onError: (e) => debugPrint("Erreur communiqués temps réel: $e"));
 
-      // Récupérer les activités récentes dynamiquement
+    // 4. Écouter tous les cours en temps réel
+    _coursesSubscription = _firestore
+        .collection('courses')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _courseCount = snapshot.docs.length;
+          _checkLoadingFinished();
+        });
+      }
+    }, onError: (e) => debugPrint("Erreur cours temps réel: $e"));
+
+    // 5. Écouter les activités récentes (les 3 derniers communiqués et utilisateurs)
+    _recentAnnouncementsSubscription = _firestore
+        .collection('announcements')
+        .orderBy('createdAt', descending: true)
+        .limit(3)
+        .snapshots()
+        .listen((announcementsSnapshot) async {
       List<Map<String, dynamic>> tempActivities = [];
 
-      // 1. Récupérer les 2 derniers communiqués
-      try {
-        final recentAnnouncements = await _firestore
-            .collection('announcements')
-            .orderBy('createdAt', descending: true)
-            .limit(2)
-            .get();
-
-        for (var doc in recentAnnouncements.docs) {
-          final data = doc.data();
-          final title = data['title'] ?? 'Nouveau communiqué';
-          final createdAt = data['createdAt'] as Timestamp?;
-          tempActivities.add({
-            'icon': Icons.campaign,
-            'text': 'Communiqué : $title',
-            'time': createdAt != null ? _formatTimestamp(createdAt) : 'Récemment',
-            'color': const Color(0xFFFFB300),
-            'timestamp': createdAt ?? Timestamp.now(),
-          });
-        }
-      } catch (e) {
-        debugPrint("Erreur lors du fetch des communiqués récents: $e");
+      // Ajouter les communiqués récents
+      for (var doc in announcementsSnapshot.docs) {
+        final data = doc.data();
+        final title = data['title'] ?? 'Nouveau communiqué';
+        final createdAt = data['createdAt'] as Timestamp?;
+        tempActivities.add({
+          'icon': Icons.campaign,
+          'text': 'Communiqué : $title',
+          'time': createdAt != null ? _formatTimestamp(createdAt) : 'Récemment',
+          'color': const Color(0xFFFFB300),
+        });
       }
 
-      // 2. Récupérer les 2 derniers utilisateurs créés
+      // Récupérer aussi rapidement les 2 derniers utilisateurs inscrits
       try {
         final recentUsers = await _firestore
             .collection('users')
             .limit(2)
-            .get(); // On prend les premiers disponibles si pas de champ de date de création
+            .get();
 
         for (var doc in recentUsers.docs) {
           final data = doc.data();
@@ -109,60 +156,61 @@ class _AdminDashboardState extends State<AdminDashboard> {
             'text': 'Nouvel inscrit ($role) : $name',
             'time': 'Actif',
             'color': AppColors.secondary,
-            'timestamp': Timestamp.now(),
           });
         }
       } catch (e) {
         debugPrint("Erreur lors du fetch des utilisateurs récents: $e");
       }
 
-      // Trier les activités pour avoir un rendu propre
       if (tempActivities.isEmpty) {
         tempActivities = [
           {
             'icon': Icons.upload,
-            'text': 'Système prêt et synchronisé avec Firestore',
+            'text': 'Système prêt et synchronisé en temps réel',
             'time': 'À l\'instant',
             'color': AppColors.primary,
-          },
-          {
-            'icon': Icons.person_add,
-            'text': 'Prêt à enregistrer de nouveaux étudiants',
-            'time': 'Actif',
-            'color': AppColors.secondaryContainer,
           }
         ];
       }
 
       if (mounted) {
         setState(() {
-          _studentCount = studentsQuery.docs.length;
-          _teacherCount = teachersQuery.docs.length;
-          _announcementCount = announcementsQuery.docs.length;
-          _courseCount = coursesQuery.docs.length;
           _dynamicActivities = tempActivities;
-          _isLoading = false;
+          _checkLoadingFinished();
         });
       }
-    } catch (e) {
-      debugPrint("Erreur lors de la récupération des stats: $e");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    }, onError: (e) => debugPrint("Erreur activités temps réel: $e"));
+  }
+
+  void _checkLoadingFinished() {
+    // Une fois qu'on a commencé à recevoir des données, on coupe le loader principal
+    if (_isLoading) {
+      _isLoading = false;
     }
   }
 
   String _formatTimestamp(Timestamp timestamp) {
     final difference = DateTime.now().difference(timestamp.toDate());
-    if (difference.inMinutes < 60) {
+    if (difference.inMinutes < 1) {
+      return 'À l\'instant';
+    } else if (difference.inMinutes < 60) {
       return 'Il y a ${difference.inMinutes} min';
     } else if (difference.inHours < 24) {
       return 'Il y a ${difference.inHours} h';
     } else {
       return 'Il y a ${difference.inDays} jours';
     }
+  }
+
+  // Permet de forcer manuellement une re-synchro si besoin
+  Future<void> _handleRefresh() async {
+    _studentsSubscription?.cancel();
+    _teachersSubscription?.cancel();
+    _announcementsSubscription?.cancel();
+    _coursesSubscription?.cancel();
+    _recentAnnouncementsSubscription?.cancel();
+    _initRealtimeListeners();
+    await Future.delayed(const Duration(milliseconds: 800));
   }
 
   @override
@@ -177,7 +225,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Positioned.fill(
             top: 80,
             child: RefreshIndicator(
-              onRefresh: _fetchStats,
+              onRefresh: _handleRefresh,
               color: theme.colorScheme.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -344,7 +392,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'Communiqués', 
           Icons.campaign, 
           colorScheme.primary, 
-          _isLoading ? '' : 'Total'
+          _isLoading ? '' : 'Live'
         ),
         _buildKPICard(
           context, 
@@ -352,7 +400,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'Cours créés', 
           Icons.folder_open, 
           const Color(0xFFFFB300), 
-          _isLoading ? '' : 'Total'
+          _isLoading ? '' : 'Live'
         ),
       ],
     );
