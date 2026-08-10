@@ -36,6 +36,123 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     return parts[0][0].toUpperCase();
   }
 
+  // Dialogue pour modifier un utilisateur en direct-direct
+  void _showEditUserDialog(BuildContext context, String docId, Map<String, dynamic> userData) {
+    final nameController = TextEditingController(text: userData['name'] ?? '');
+    final matriculeController = TextEditingController(text: userData['matricule'] ?? '');
+    String selectedRole = userData['role'] ?? 'student';
+    String selectedStatus = userData['status'] ?? 'active';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: colorScheme.surface,
+              title: Text(
+                'Modifier l\'utilisateur',
+                style: AppTextStyles.headlineMedium.copyWith(color: AppColors.primary),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom complet',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: matriculeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Matricule',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedRole,
+                      decoration: const InputDecoration(
+                        labelText: 'Rôle',
+                        border: OutlineInputBorder(),
+                      ),
+                      dropdownColor: colorScheme.surface,
+                      items: const [
+                        DropdownMenuItem(value: 'student', child: Text('Étudiant')),
+                        DropdownMenuItem(value: 'teacher', child: Text('Enseignant')),
+                        DropdownMenuItem(value: 'admin', child: Text('Administrateur')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => selectedRole = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Statut',
+                        border: OutlineInputBorder(),
+                      ),
+                      dropdownColor: colorScheme.surface,
+                      items: const [
+                        DropdownMenuItem(value: 'active', child: Text('Actif')),
+                        DropdownMenuItem(value: 'inactive', child: Text('Suspendu')),
+                        DropdownMenuItem(value: 'pending', child: Text('En attente')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => selectedStatus = value);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Annuler', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  onPressed: () async {
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Le nom ne peut pas être vide, mola !')),
+                      );
+                      return;
+                    }
+                    await _firestore.collection('users').doc(docId).update({
+                      'name': nameController.text.trim(),
+                      'matricule': matriculeController.text.trim().toUpperCase(),
+                      'role': selectedRole,
+                      'status': selectedStatus,
+                    });
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Utilisateur mis à jour avec succès !')),
+                      );
+                    }
+                  },
+                  child: const Text('Enregistrer', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -520,9 +637,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   );
                 }
               } else if (value == 'edit') {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Modification de $name (Bientôt disponible)')),
-                );
+                _showEditUserDialog(context, docId, userRaw);
               }
             },
             itemBuilder: (BuildContext context) => [
