@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -11,52 +12,7 @@ class AdminUsersScreen extends StatefulWidget {
 }
 
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
-  // Liste dynamique des utilisateurs
-  final List<Map<String, dynamic>> _users = [
-    {
-      'initials': 'KM',
-      'name': 'Kofi Mensah',
-      'matricule': 'MAT-2024-001',
-      'role': 'Étudiant',
-      'isActive': true,
-    },
-    {
-      'initials': 'AD',
-      'name': 'Amina Diallo',
-      'matricule': 'PROF-2022-042',
-      'role': 'Enseignant',
-      'isActive': true,
-    },
-    {
-      'initials': 'SO',
-      'name': 'Samuel Okoro',
-      'matricule': 'ADM-2019-005',
-      'role': 'Administrateur',
-      'isActive': true,
-    },
-    {
-      'initials': 'JB',
-      'name': 'Jean Bakari',
-      'matricule': 'MAT-2023-118',
-      'role': 'Étudiant',
-      'isActive': false,
-    },
-    {
-      'initials': 'FT',
-      'name': 'Fanta Traoré',
-      'matricule': 'MAT-2024-089',
-      'role': 'Étudiant',
-      'isActive': true,
-    },
-    {
-      'initials': 'PN',
-      'name': 'Paul Ngueme',
-      'matricule': 'PROF-2021-011',
-      'role': 'Enseignant',
-      'isActive': false,
-    },
-  ];
-
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String _searchQuery = '';
   String _selectedFilter = 'Tous';
   int _currentNavIndex = 2; // Index par défaut pour "Users"
@@ -70,30 +26,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     super.dispose();
   }
 
-  // Filtrer les utilisateurs selon la recherche et le filtre sélectionné
-  List<Map<String, dynamic>> get _filteredUsers {
-    return _users.where((user) {
-      final matchesSearch = user['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          user['matricule'].toLowerCase().contains(_searchQuery.toLowerCase());
-
-      if (_selectedFilter == 'Tous') {
-        return matchesSearch;
-      } else if (_selectedFilter == 'Étudiants') {
-        return matchesSearch && user['role'] == 'Étudiant';
-      } else if (_selectedFilter == 'Enseignants') {
-        return matchesSearch && user['role'] == 'Enseignant';
-      } else if (_selectedFilter == 'Administrateurs') {
-        return matchesSearch && user['role'] == 'Administrateur';
-      }
-      return matchesSearch;
-    }).toList();
+  // Obtenir les initiales d'un nom
+  String _getInitials(String name) {
+    if (name.isEmpty) return 'U';
+    final parts = name.trim().split(' ');
+    if (parts.length > 1) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
   }
-
-  // Calculer les statistiques dynamiquement
-  int get _totalUsers => _users.length;
-  int get _totalStudents => _users.where((u) => u['role'] == 'Étudiant').length;
-  int get _totalTeachers => _users.where((u) => u['role'] == 'Enseignant').length;
-  int get _totalSuspended => _users.where((u) => !u['isActive']).length;
 
   @override
   Widget build(BuildContext context) {
@@ -114,11 +55,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   const SizedBox(height: 12),
                   _buildHeader(),
                   const SizedBox(height: 32),
-                  _buildAnalyticsGrid(context),
+                  _buildAnalyticsSection(context),
                   const SizedBox(height: 32),
                   _buildSearchAndFilters(context),
                   const SizedBox(height: 24),
-                  _buildUserList(context),
+                  _buildUserListStream(context),
                   const SizedBox(height: 120),
                 ],
               ),
@@ -192,38 +133,49 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       children: [
         Text('Gestion des utilisateurs', style: AppTextStyles.headlineLarge),
         Text(
-          'Supervisez les comptes académiques',
+          'Supervisez les comptes académiques en temps réel',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
         ),
       ],
     );
   }
 
-  Widget _buildAnalyticsGrid(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.6,
-      children: [
-        _buildStatCard(context, 'Total utilisateurs', '$_totalUsers', null, () {
-          setState(() => _selectedFilter = 'Tous');
-        }),
-        _buildStatCard(context, 'Étudiants', '$_totalStudents', AppColors.primary, () {
-          setState(() => _selectedFilter = 'Étudiants');
-        }),
-        _buildStatCard(context, 'Enseignants', '$_totalTeachers', AppColors.secondaryContainer, () {
-          setState(() => _selectedFilter = 'Enseignants');
-        }),
-        _buildStatCard(context, 'Suspendus', '$_totalSuspended', AppColors.error, () {
-          // Filtre spécial ou simple notification
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Il y a $_totalSuspended compte(s) suspendu(s) actuellement.')),
-          );
-        }),
-      ],
+  Widget _buildAnalyticsSection(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('users').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final docs = snapshot.data!.docs;
+        final total = docs.length;
+        final students = docs.where((d) => (d.data() as Map<String, dynamic>)['role'] == 'student').length;
+        final teachers = docs.where((d) => (d.data() as Map<String, dynamic>)['role'] == 'teacher').length;
+        final pending = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == 'pending').length;
+
+        return GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.6,
+          children: [
+            _buildStatCard(context, 'Total utilisateurs', '$total', null, () {
+              setState(() => _selectedFilter = 'Tous');
+            }),
+            _buildStatCard(context, 'Étudiants', '$students', AppColors.primary, () {
+              setState(() => _selectedFilter = 'Étudiants');
+            }),
+            _buildStatCard(context, 'Enseignants', '$teachers', AppColors.secondaryContainer, () {
+              setState(() => _selectedFilter = 'Enseignants');
+            }),
+            _buildStatCard(context, 'En attente', '$pending', Colors.orange, () {
+              setState(() => _selectedFilter = 'En attente');
+            }),
+          ],
+        );
+      },
     );
   }
 
@@ -315,6 +267,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               _buildFilterChip('Enseignants'),
               const SizedBox(width: 8),
               _buildFilterChip('Administrateurs'),
+              const SizedBox(width: 8),
+              _buildFilterChip('En attente'),
             ],
           ),
         ),
@@ -346,35 +300,95 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Widget _buildUserList(BuildContext context) {
-    final filtered = _filteredUsers;
-    if (filtered.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32),
-          child: Text(
-            'Aucun utilisateur trouvé',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
-          ),
-        ),
-      );
-    }
+  Widget _buildUserListStream(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('users').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Text(
+                'Aucun utilisateur trouvé dans Firestore',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
+              ),
+            ),
+          );
+        }
 
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: filtered.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final user = filtered[index];
-        return _buildUserCard(
-          context,
-          user['initials'],
-          user['name'],
-          user['matricule'],
-          user['role'],
-          user['isActive'],
-          user,
+        final docs = snapshot.data!.docs;
+
+        // Filtrer localement selon la recherche et le filtre sélectionné
+        final filteredDocs = docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final name = (data['name'] ?? '').toString().toLowerCase();
+          final matricule = (data['matricule'] ?? '').toString().toLowerCase();
+          final role = (data['role'] ?? '').toString();
+          final status = (data['status'] ?? '').toString();
+
+          final matchesSearch = name.contains(_searchQuery.toLowerCase()) ||
+              matricule.contains(_searchQuery.toLowerCase());
+
+          if (_selectedFilter == 'Tous') {
+            return matchesSearch;
+          } else if (_selectedFilter == 'Étudiants') {
+            return matchesSearch && role == 'student';
+          } else if (_selectedFilter == 'Enseignants') {
+            return matchesSearch && role == 'teacher';
+          } else if (_selectedFilter == 'Administrateurs') {
+            return matchesSearch && role == 'admin';
+          } else if (_selectedFilter == 'En attente') {
+            return matchesSearch && status == 'pending';
+          }
+          return matchesSearch;
+        }).toList();
+
+        if (filteredDocs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Text(
+                'Aucun utilisateur ne correspond aux critères',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: filteredDocs.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final doc = filteredDocs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final name = data['name'] ?? 'Sans nom';
+            final matricule = data['matricule'] ?? 'Pas de matricule';
+            final role = data['role'] ?? 'student';
+            final status = data['status'] ?? 'active';
+
+            String displayRole = 'Étudiant';
+            if (role == 'teacher') displayRole = 'Enseignant';
+            if (role == 'admin') displayRole = 'Administrateur';
+
+            final isActive = status == 'active';
+
+            return _buildUserCard(
+              context,
+              _getInitials(name),
+              name,
+              matricule,
+              displayRole,
+              isActive,
+              status == 'pending',
+              doc.id,
+              data,
+            );
+          },
         );
       },
     );
@@ -387,6 +401,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     String id,
     String role,
     bool isActive,
+    bool isPending,
+    String docId,
     Map<String, dynamic> userRaw,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -454,13 +470,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: isActive ? AppColors.primary : AppColors.error,
+                      color: isPending 
+                          ? Colors.orange 
+                          : (isActive ? AppColors.primary : AppColors.error),
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    isActive ? 'Actif' : 'Suspendu',
+                    isPending ? 'En attente' : (isActive ? 'Actif' : 'Suspendu'),
                     style: AppTextStyles.labelMedium.copyWith(
                       color: AppColors.onSurfaceVariant,
                       fontSize: 10,
@@ -474,28 +492,36 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: AppColors.onSurfaceVariant),
             color: colorScheme.surface,
-            onSelected: (value) {
+            onSelected: (value) async {
               if (value == 'toggle_status') {
-                setState(() {
-                  userRaw['isActive'] = !userRaw['isActive'];
+                final nextStatus = isActive ? 'inactive' : 'active';
+                await _firestore.collection('users').doc(docId).update({
+                  'status': nextStatus,
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Statut de ${userRaw['name']} mis à jour : ${userRaw['isActive'] ? "Actif" : "Suspendu"}',
-                    ),
-                  ),
-                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Statut de $name mis à jour !')),
+                  );
+                }
+              } else if (value == 'approve') {
+                await _firestore.collection('users').doc(docId).update({
+                  'status': 'active',
+                });
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Compte de $name approuvé avec succès !')),
+                  );
+                }
               } else if (value == 'delete') {
-                setState(() {
-                  _users.remove(userRaw);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${userRaw['name']} a été supprimé.')),
-                );
+                await _firestore.collection('users').doc(docId).delete();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$name a été supprimé.')),
+                  );
+                }
               } else if (value == 'edit') {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Modification de ${userRaw['name']} (Bientôt disponible)')),
+                  SnackBar(content: Text('Modification de $name (Bientôt disponible)')),
                 );
               }
             },
@@ -510,20 +536,32 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   ],
                 ),
               ),
-              PopupMenuItem<String>(
-                value: 'toggle_status',
-                child: Row(
-                  children: [
-                    Icon(
-                      isActive ? Icons.block : Icons.check_circle_outline,
-                      size: 18,
-                      color: isActive ? AppColors.error : AppColors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(isActive ? 'Suspendre' : 'Activer'),
-                  ],
+              if (isPending)
+                PopupMenuItem<String>(
+                  value: 'approve',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      const Text('Approuver le compte'),
+                    ],
+                  ),
+                )
+              else
+                PopupMenuItem<String>(
+                  value: 'toggle_status',
+                  child: Row(
+                    children: [
+                      Icon(
+                        isActive ? Icons.block : Icons.check_circle_outline,
+                        size: 18,
+                        color: isActive ? AppColors.error : AppColors.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(isActive ? 'Suspendre' : 'Activer'),
+                    ],
+                  ),
                 ),
-              ),
               PopupMenuItem<String>(
                 value: 'delete',
                 child: const Row(
@@ -593,9 +631,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         setState(() {
           _currentNavIndex = index;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Navigation vers $label')),
-        );
+        if (index == 0) {
+          context.go('/admin-dashboard');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Navigation vers $label')),
+          );
+        }
       },
       child: Container(
         color: Colors.transparent,

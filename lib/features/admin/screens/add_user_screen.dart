@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -11,10 +12,90 @@ class AdminAddUserScreen extends StatefulWidget {
 }
 
 class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Contrôleurs de saisie
+  final TextEditingController _matriculeController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _birthDateController = TextEditingController();
+
   String _selectedRole = 'Étudiant';
+  String _selectedFiliere = 'Génie Logiciel (GL)';
+  String _selectedNiveau = 'Licence 1';
+  String _selectedGroupe = 'Groupe A';
+
   bool _forcePasswordChange = true;
   bool _accountActive = true;
   bool _sendInvitation = false;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _matriculeController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _birthDateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveUser() async {
+    if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Le nom et l\'email sont obligatoires, mola !')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      String roleKey = 'student';
+      if (_selectedRole == 'Enseignant') roleKey = 'teacher';
+      if (_selectedRole == 'Admin') roleKey = 'admin';
+
+      final userData = {
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'matricule': _matriculeController.text.trim().toUpperCase(),
+        'phone': _phoneController.text.trim(),
+        'birthDate': _birthDateController.text.trim(),
+        'role': roleKey,
+        'filiere': _selectedFiliere,
+        'niveau': _selectedNiveau,
+        'groupe': _selectedGroupe,
+        'forcePasswordChange': _forcePasswordChange,
+        'status': _accountActive ? 'active' : 'inactive',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      // On crée un document avec un ID généré automatiquement
+      await _firestore.collection('users').add(userData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Utilisateur enregistré avec succès !')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de l\'enregistrement: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,35 +108,37 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           _buildAppBar(context),
           Positioned.fill(
             top: 80,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  _buildProfilePreview(context),
-                  const SizedBox(height: 32),
-                  _buildSectionHeader(context, Icons.person, 'Informations Personnelles'),
-                  const SizedBox(height: 12),
-                  _buildPersonalInfoForm(context),
-                  const SizedBox(height: 32),
-                  _buildSectionHeader(context, Icons.badge, 'Rôle Et Permissions'),
-                  const SizedBox(height: 12),
-                  _buildRoleSelection(context),
-                  const SizedBox(height: 32),
-                  _buildDynamicFields(context),
-                  const SizedBox(height: 32),
-                  _buildSectionHeader(context, Icons.security, 'Sécurité'),
-                  const SizedBox(height: 12),
-                  _buildSecuritySection(context),
-                  const SizedBox(height: 32),
-                  _buildStatusSection(context),
-                  const SizedBox(height: 48),
-                  _buildActionButtons(context),
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
+            child: _isSaving 
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 12),
+                      _buildProfilePreview(context),
+                      const SizedBox(height: 32),
+                      _buildSectionHeader(context, Icons.person, 'Informations Personnelles'),
+                      const SizedBox(height: 12),
+                      _buildPersonalInfoForm(context),
+                      const SizedBox(height: 32),
+                      _buildSectionHeader(context, Icons.badge, 'Rôle Et Permissions'),
+                      const SizedBox(height: 12),
+                      _buildRoleSelection(context),
+                      const SizedBox(height: 32),
+                      _buildDynamicFields(context),
+                      const SizedBox(height: 32),
+                      _buildSectionHeader(context, Icons.security, 'Sécurité'),
+                      const SizedBox(height: 12),
+                      _buildSecuritySection(context),
+                      const SizedBox(height: 32),
+                      _buildStatusSection(context),
+                      const SizedBox(height: 48),
+                      _buildActionButtons(context),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
           ),
         ],
       ),
@@ -102,13 +185,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.save, color: AppColors.amber),
-                onPressed: () {
-                  // Lors de la sauvegarde, la date de création (createdAt) sera automatiquement DateTime.now()
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Utilisateur enregistré avec succès !')),
-                  );
-                  context.pop();
-                },
+                onPressed: _saveUser,
               ),
             ],
           ),
@@ -219,17 +296,17 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       ),
       child: Column(
         children: [
-          _buildTextField(context, 'Matricule', 'Ex: 23U045'),
+          _buildTextField(context, 'Matricule', 'Ex: 23U045', _matriculeController),
           const SizedBox(height: 16),
-          _buildTextField(context, 'Nom complet', 'Prénom et Nom'),
+          _buildTextField(context, 'Nom complet', 'Prénom et Nom', _nameController),
           const SizedBox(height: 16),
-          _buildTextField(context, 'Email Académique', 'nom@acadify.edu', keyboardType: TextInputType.emailAddress),
+          _buildTextField(context, 'Email Académique', 'nom@acadify.edu', _emailController, keyboardType: TextInputType.emailAddress),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildTextField(context, 'Téléphone', '+237 ...', keyboardType: TextInputType.phone)),
+              Expanded(child: _buildTextField(context, 'Téléphone', '+237 ...', _phoneController, keyboardType: TextInputType.phone)),
               const SizedBox(width: 12),
-              Expanded(child: _buildTextField(context, 'Date de naissance', 'JJ/MM/AAAA')),
+              Expanded(child: _buildTextField(context, 'Date de naissance', 'JJ/MM/AAAA', _birthDateController)),
             ],
           ),
         ],
@@ -237,7 +314,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     );
   }
 
-  Widget _buildTextField(BuildContext context, String label, String hint, {TextInputType? keyboardType}) {
+  Widget _buildTextField(BuildContext context, String label, String hint, TextEditingController controller, {TextInputType? keyboardType}) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Column(
@@ -249,6 +326,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         ),
         const SizedBox(height: 4),
         TextField(
+          controller: controller,
           keyboardType: keyboardType,
           style: AppTextStyles.bodyMedium,
           decoration: InputDecoration(
@@ -347,13 +425,35 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       ),
       child: Column(
         children: [
-          _buildDropdown(context, 'Filière / Département', ['Génie Logiciel (GL)', 'Réseaux & Télécoms (RT)', 'IA', 'Cyber-sécurité']),
+          _buildDropdown(
+            context, 
+            'Filière / Département', 
+            ['Génie Logiciel (GL)', 'Réseaux & Télécoms (RT)', 'IA', 'Cyber-sécurité'],
+            _selectedFiliere,
+            (v) => setState(() => _selectedFiliere = v!),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _buildDropdown(context, 'Niveau', ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'])),
+              Expanded(
+                child: _buildDropdown(
+                  context, 
+                  'Niveau', 
+                  ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'],
+                  _selectedNiveau,
+                  (v) => setState(() => _selectedNiveau = v!),
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _buildDropdown(context, 'Groupe', ['Groupe A', 'Groupe B', 'Groupe C'])),
+              Expanded(
+                child: _buildDropdown(
+                  context, 
+                  'Groupe', 
+                  ['Groupe A', 'Groupe B', 'Groupe C'],
+                  _selectedGroupe,
+                  (v) => setState(() => _selectedGroupe = v!),
+                ),
+              ),
             ],
           ),
         ],
@@ -361,7 +461,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     );
   }
 
-  Widget _buildDropdown(BuildContext context, String label, List<String> options) {
+  Widget _buildDropdown(BuildContext context, String label, List<String> options, String currentValue, ValueChanged<String?> onChanged) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Column(
@@ -382,7 +482,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
-              value: options[0],
+              value: currentValue,
               dropdownColor: colorScheme.surface,
               items: options.map((String value) {
                 return DropdownMenuItem<String>(
@@ -390,7 +490,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                   child: Text(value, style: AppTextStyles.bodyMedium),
                 );
               }).toList(),
-              onChanged: (_) {},
+              onChanged: onChanged,
             ),
           ),
         ),
@@ -509,12 +609,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Compte créé avec succès !')),
-              );
-              context.pop();
-            },
+            onPressed: _saveUser,
             style: ElevatedButton.styleFrom(
               backgroundColor: colorScheme.primaryContainer,
               foregroundColor: Colors.white,

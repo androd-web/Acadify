@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -11,13 +12,78 @@ class AdminComposeAnnouncement extends StatefulWidget {
 }
 
 class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _bodyController = TextEditingController();
+
   String _selectedCategory = 'Urgent';
+  String _selectedTarget = 'all'; // 'all', 'filiere', 'niveau'
+  bool _isPublishing = false;
 
   List<Map<String, dynamic>> _getCategories(ColorScheme colorScheme) => [
     {'label': 'Urgent', 'icon': Icons.campaign, 'color': colorScheme.error},
     {'label': 'Information', 'icon': Icons.info, 'color': colorScheme.secondary},
     {'label': 'Général', 'icon': Icons.public, 'color': colorScheme.primary},
   ];
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _publishAnnouncement() async {
+    if (_titleController.text.trim().isEmpty || _bodyController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Le titre et le contenu sont requis, mola !')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isPublishing = true;
+    });
+
+    try {
+      String categoryKey = 'info';
+      if (_selectedCategory == 'Urgent') categoryKey = 'urgent';
+      if (_selectedCategory == 'Général') categoryKey = 'general';
+
+      final announcementData = {
+        'title': _titleController.text.trim(),
+        'body': _bodyController.text.trim(),
+        'category': categoryKey,
+        'targetGroup': _selectedTarget,
+        'createdAt': FieldValue.serverTimestamp(),
+        'authorUid': 'admin_uid',
+        'authorName': 'Administrateur',
+        'attachmentUrl': null,
+      };
+
+      await _firestore.collection('announcements').add(announcementData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Communiqué publié avec succès !')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la publication: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,29 +96,31 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           _buildAppBar(context),
           Positioned.fill(
             top: 80,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  _buildTitleSection(context),
-                  const SizedBox(height: 32),
-                  _buildCategorySection(context),
-                  const SizedBox(height: 32),
-                  _buildContentSection(context),
-                  const SizedBox(height: 32),
-                  _buildTargetSection(context),
-                  const SizedBox(height: 32),
-                  _buildAttachmentSection(context),
-                  const SizedBox(height: 32),
-                  _buildNotificationNotice(context),
-                  const SizedBox(height: 120),
-                ],
-              ),
-            ),
+            child: _isPublishing 
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 24),
+                      _buildTitleSection(context),
+                      const SizedBox(height: 32),
+                      _buildCategorySection(context),
+                      const SizedBox(height: 32),
+                      _buildContentSection(context),
+                      const SizedBox(height: 32),
+                      _buildTargetSection(context),
+                      const SizedBox(height: 32),
+                      _buildAttachmentSection(context),
+                      const SizedBox(height: 32),
+                      _buildNotificationNotice(context),
+                      const SizedBox(height: 120),
+                    ],
+                  ),
+                ),
           ),
-          _buildBottomAction(context),
+          if (!_isPublishing) _buildBottomAction(context),
         ],
       ),
     );
@@ -115,11 +183,13 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('EN-TÊTE', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
-            Text('0/100', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
+            Text('${_titleController.text.length}/100', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
           ],
         ),
         const SizedBox(height: 8),
         TextField(
+          controller: _titleController,
+          onChanged: (v) => setState(() {}),
           style: AppTextStyles.headlineLarge.copyWith(color: colorScheme.onSurface),
           decoration: InputDecoration(
             hintText: 'Titre de l\'annonce...',
@@ -184,7 +254,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('CONTENU DU COMMUNIQUÉ *', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
-            Text('0/2000', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
+            Text('${_bodyController.text.length}/2000', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
           ],
         ),
         const SizedBox(height: 16),
@@ -213,6 +283,8 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 ),
               ),
               TextField(
+                controller: _bodyController,
+                onChanged: (v) => setState(() {}),
                 maxLines: 6,
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
@@ -245,70 +317,54 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       children: [
         Text('DESTINATAIRES *', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
         const SizedBox(height: 16),
-        _buildTargetCard(context, 'Toute l\'université', '487 étudiants actifs', true),
+        _buildTargetCard(context, 'Toute l\'université', 'Tous les étudiants et enseignants', _selectedTarget == 'all', () {
+          setState(() => _selectedTarget = 'all');
+        }),
         const SizedBox(height: 12),
-        _buildTargetCard(context, 'Par filière', 'Sélectionnez une ou plusieurs filières', false),
+        _buildTargetCard(context, 'Par filière', 'Sélectionnez une filière spécifique', _selectedTarget == 'filiere', () {
+          setState(() => _selectedTarget = 'filiere');
+        }),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Par niveau', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: ['L1', 'L2', 'L3', 'M1', 'M2'].map((lvl) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-                  ),
-                  child: Text(lvl, style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant)),
-                )).toList(),
-              ),
-            ],
-          ),
-        ),
+        _buildTargetCard(context, 'Par niveau', 'Sélectionnez un niveau spécifique', _selectedTarget == 'niveau', () {
+          setState(() => _selectedTarget = 'niveau');
+        }),
       ],
     );
   }
 
-  Widget _buildTargetCard(BuildContext context, String title, String subtitle, bool isSelected) {
+  Widget _buildTargetCard(BuildContext context, String title, String subtitle, bool isSelected, VoidCallback onTap) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: isSelected 
-          ? BorderDirectional(
-              start: const BorderSide(color: AppColors.amber, width: 4),
-              top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-              bottom: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-              end: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-            )
-          : Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-              Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
-            ],
-          ),
-          if (isSelected) const Icon(Icons.check_circle, color: AppColors.amber)
-          else Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected 
+            ? BorderDirectional(
+                start: const BorderSide(color: AppColors.amber, width: 4),
+                top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                bottom: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                end: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+              )
+            : Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
+              ],
+            ),
+            if (isSelected) const Icon(Icons.check_circle, color: AppColors.amber)
+            else Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
@@ -371,9 +427,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           border: Border(top: BorderSide(color: theme.colorScheme.onSurface.withValues(alpha: 0.05))),
         ),
         child: ElevatedButton(
-          onPressed: () {
-            // Show confirmation sheet or publish
-          },
+          onPressed: _publishAnnouncement,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.amber,
             foregroundColor: Colors.black,
