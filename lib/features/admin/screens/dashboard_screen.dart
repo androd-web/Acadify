@@ -148,11 +148,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
       for (var doc in announcementsSnapshot.docs) {
         final data = doc.data();
         final title = data['title'] ?? 'Nouveau communiqué';
-        final createdAt = data['createdAt'] as Timestamp?;
+        
+        // Parsing robuste de la date pour éviter le crash mola
+        DateTime? createdDateTime;
+        final rawCreatedAt = data['createdAt'];
+        if (rawCreatedAt is Timestamp) {
+          createdDateTime = rawCreatedAt.toDate();
+        } else if (rawCreatedAt is String) {
+          createdDateTime = DateTime.tryParse(rawCreatedAt);
+        }
+
         tempActivities.add({
           'icon': Icons.campaign,
           'text': 'Communiqué : $title',
-          'time': createdAt != null ? _formatTimestamp(createdAt) : 'Récemment',
+          'time': createdDateTime != null ? _formatDateTime(createdDateTime) : 'Récemment',
           'color': const Color(0xFFFFB300),
         });
       }
@@ -206,8 +215,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  String _formatTimestamp(Timestamp timestamp) {
-    final difference = DateTime.now().difference(timestamp.toDate());
+  String _formatDateTime(DateTime dateTime) {
+    final difference = DateTime.now().difference(dateTime);
     if (difference.inMinutes < 1) {
       return 'À l\'instant';
     } else if (difference.inMinutes < 60) {

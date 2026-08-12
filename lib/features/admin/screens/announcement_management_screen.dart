@@ -261,7 +261,15 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
             final category = data['category'] ?? 'info';
             final targetGroup = data['targetGroup'] ?? 'all';
             final status = data['status'] ?? 'published';
-            final createdAt = data['createdAt'] as Timestamp?;
+
+            // Parsing robuste de la date pour éviter le crash mola
+            DateTime? createdDateTime;
+            final rawCreatedAt = data['createdAt'];
+            if (rawCreatedAt is Timestamp) {
+              createdDateTime = rawCreatedAt.toDate();
+            } else if (rawCreatedAt is String) {
+              createdDateTime = DateTime.tryParse(rawCreatedAt);
+            }
 
             String displayType = 'Information';
             Color categoryColor = AppColors.secondary;
@@ -278,9 +286,8 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
             }
 
             String timeStr = 'Récemment';
-            if (createdAt != null) {
-              final date = createdAt.toDate();
-              timeStr = '${date.day}/${date.month} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+            if (createdDateTime != null) {
+              timeStr = '${createdDateTime.day}/${createdDateTime.month} à ${createdDateTime.hour}:${createdDateTime.minute.toString().padLeft(2, '0')}';
             }
 
             return _buildAnnouncementCard(
