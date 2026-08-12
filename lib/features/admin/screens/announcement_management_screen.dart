@@ -477,7 +477,6 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
             _buildBottomNavItem(context, Icons.grid_view, 'Dashboard', false, () => context.go('/admin-dashboard')),
             _buildBottomNavItem(context, Icons.group, 'Users', false, () => context.go('/admin-users')),
             _buildBottomNavItem(context, Icons.notifications_active, 'Alerts', true, () {}),
-            _buildBottomNavItem(context, Icons.settings, 'Settings', false, () {}),
           ],
         ),
       ),
