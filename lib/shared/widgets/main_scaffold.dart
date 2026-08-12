@@ -13,21 +13,39 @@ class MainScaffold extends StatefulWidget {
 }
 
 class _MainScaffoldState extends State<MainScaffold> {
-  int _calculateSelectedIndex(BuildContext context) {
+  int _calculateSelectedIndex(BuildContext context, UserRole role) {
     final String location = GoRouterState.of(context).uri.path;
-    if (location.startsWith('/student-dashboard') || location.startsWith('/teacher-dashboard') || location.startsWith('/admin-dashboard')) {
+    
+    if (role == UserRole.admin) {
+      if (location.startsWith('/admin-dashboard')) {
+        return 0;
+      }
+      if (location.startsWith('/admin-announcements')) {
+        return 1;
+      }
+      if (location.startsWith('/admin-users')) {
+        return 2;
+      }
+      if (location.startsWith('/admin-profile')) {
+        return 3;
+      }
       return 0;
     }
-    if (location.startsWith('/courses') || location.startsWith('/teacher-courses') || location.startsWith('/admin-announcements')) {
+
+    // Pour les étudiants et enseignants
+    if (location.startsWith('/student-dashboard') || location.startsWith('/teacher-dashboard')) {
+      return 0;
+    }
+    if (location.startsWith('/courses') || location.startsWith('/teacher-courses')) {
       return 1;
     }
-    if (location.startsWith('/grades') || location.startsWith('/teacher-grade-entry') || location.startsWith('/admin-users')) {
+    if (location.startsWith('/grades') || location.startsWith('/teacher-grade-entry')) {
       return 2;
     }
     if (location.startsWith('/schedule') || location.startsWith('/teacher-schedule') || location.startsWith('/settings')) {
       return 3;
     }
-    if (location.startsWith('/profile') || location.startsWith('/teacher-profile') || location.startsWith('/admin-profile')) {
+    if (location.startsWith('/profile') || location.startsWith('/teacher-profile')) {
       return 4;
     }
     return 0;
@@ -58,8 +76,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           case 0: context.go('/admin-dashboard'); break;
           case 1: context.go('/admin-announcements'); break;
           case 2: context.go('/admin-users'); break;
-          case 3: context.go('/settings'); break;
-          case 4: context.go('/admin-profile'); break;
+          case 3: context.go('/admin-profile'); break;
         }
         break;
     }
@@ -88,7 +105,6 @@ class _MainScaffoldState extends State<MainScaffold> {
           CustomBottomNavItem(icon: Icons.admin_panel_settings_rounded, label: 'Admin'),
           CustomBottomNavItem(icon: Icons.campaign_rounded, label: 'Annonces'),
           CustomBottomNavItem(icon: Icons.people_rounded, label: 'Users'),
-          CustomBottomNavItem(icon: Icons.settings_rounded, label: 'Settings'),
           CustomBottomNavItem(icon: Icons.person_rounded, label: 'Profil'),
         ];
     }
@@ -108,7 +124,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         children: [
           widget.child,
           CustomNavigationBar(
-            currentIndex: _calculateSelectedIndex(context),
+            currentIndex: _calculateSelectedIndex(context, role),
             items: _getNavItems(role, context),
             onTap: (index) => _onItemTapped(index, context, role),
           ),
