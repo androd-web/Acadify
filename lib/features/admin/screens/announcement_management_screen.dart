@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -11,8 +12,17 @@ class AdminAnnouncementManagement extends StatefulWidget {
 }
 
 class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagement> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String _activeFilter = 'Tous';
+  String _searchQuery = '';
   final List<String> _filters = ['Tous', 'Urgent', 'Information', 'Général', 'Archivés'];
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +45,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                   const SizedBox(height: 24),
                   _buildFilters(context),
                   const SizedBox(height: 24),
-                  _buildAnnouncementList(context),
-                  const SizedBox(height: 32),
-                  _buildArchivedSection(context),
+                  _buildDynamicAnnouncementList(context),
                   const SizedBox(height: 120),
                 ],
               ),
@@ -79,16 +87,30 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                     'Communiqués',
                     style: AppTextStyles.headlineMedium.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    '14 publiés · 3 archivés',
-                    style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: _firestore.collection('announcements').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox.shrink();
+                      final total = snapshot.data!.docs.length;
+                      final archived = snapshot.data!.docs.where((d) {
+                        final data = d.data() as Map<String, dynamic>;
+                        return data['status'] == 'archived';
+                      }).length;
+                      final active = total - archived;
+                      return Text(
+                        '$active publiés · $archived archivés',
+                        style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                      );
+                    },
                   ),
                 ],
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.filter_list, color: AppColors.amber),
-                onPressed: () {},
+                icon: const Icon(Icons.refresh, color: AppColors.amber),
+                onPressed: () {
+                  setState(() {});
+                },
               ),
             ],
           ),
@@ -107,9 +129,26 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
         border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
       ),
       child: TextField(
+        controller: _searchController,
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
         decoration: InputDecoration(
           hintText: 'Rechercher un communiqué...',
           prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
           border: InputBorder.none,
         ),
       ),
@@ -150,55 +189,129 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
     );
   }
 
-  Widget _buildAnnouncementList(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        _buildAnnouncementCard(
-          context: context,
-          color: colorScheme.error,
-          type: 'Urgent',
-          time: 'Aujourd\'hui, 09:45',
-          title: 'Report des examens de fin de semestre - Faculté de Droit',
-          tags: ['Faculté de Droit'],
-          views: '1.2k',
-          status: 'PUBLIÉ',
-        ),
-        const SizedBox(height: 16),
-        _buildAnnouncementCard(
-          context: context,
-          color: colorScheme.secondary,
-          type: 'Information',
-          time: 'Hier, 14:20',
-          title: 'Mise à jour de la plateforme de bourses d\'études 2024',
-          tags: ['Toute l\'université'],
-          views: '856',
-          status: 'PUBLIÉ',
-        ),
-        const SizedBox(height: 16),
-        _buildAnnouncementCard(
-          context: context,
-          color: AppColors.amber,
-          type: 'Général',
-          time: '24 Oct, 11:00',
-          title: 'Inauguration du nouveau complexe sportif UIECC',
-          tags: ['Tous les Campus'],
-          views: '3.4k',
-          status: 'PUBLIÉ',
-        ),
-      ],
+  Widget _buildDynamicAnnouncementList(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore.collection('announcements').orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Text(
+                'Aucun communiqué trouvé, mola.',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
+              ),
+            ),
+          );
+        }
+
+        final docs = snapshot.data!.docs;
+
+        // Filtrage local
+        final filteredDocs = docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final title = (data['title'] ?? '').toString().toLowerCase();
+          final category = (data['category'] ?? 'info').toString().toLowerCase();
+          final status = (data['status'] ?? 'published').toString().toLowerCase();
+
+          final matchesSearch = title.contains(_searchQuery.toLowerCase());
+
+          if (!matchesSearch) return false;
+
+          if (_activeFilter == 'Tous') {
+            return status != 'archived';
+          } else if (_activeFilter == 'Urgent') {
+            return category == 'urgent' && status != 'archived';
+          } else if (_activeFilter == 'Information') {
+            return category == 'info' && status != 'archived';
+          } else if (_activeFilter == 'Général') {
+            return category == 'general' && status != 'archived';
+          } else if (_activeFilter == 'Archivés') {
+            return status == 'archived';
+          }
+          return true;
+        }).toList();
+
+        if (filteredDocs.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Text(
+                'Aucun communiqué ne correspond à ce filtre.',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
+              ),
+            ),
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: filteredDocs.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            final doc = filteredDocs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final docId = doc.id;
+
+            final title = data['title'] ?? 'Sans titre';
+            final category = data['category'] ?? 'info';
+            final targetGroup = data['targetGroup'] ?? 'all';
+            final status = data['status'] ?? 'published';
+            final createdAt = data['createdAt'] as Timestamp?;
+
+            String displayType = 'Information';
+            Color categoryColor = AppColors.secondary;
+            IconData categoryIcon = Icons.info;
+
+            if (category == 'urgent') {
+              displayType = 'Urgent';
+              categoryColor = Theme.of(context).colorScheme.error;
+              categoryIcon = Icons.campaign;
+            } else if (category == 'general') {
+              displayType = 'Général';
+              categoryColor = AppColors.amber;
+              categoryIcon = Icons.public;
+            }
+
+            String timeStr = 'Récemment';
+            if (createdAt != null) {
+              final date = createdAt.toDate();
+              timeStr = '${date.day}/${date.month} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+            }
+
+            return _buildAnnouncementCard(
+              context: context,
+              docId: docId,
+              color: categoryColor,
+              type: displayType,
+              icon: categoryIcon,
+              time: timeStr,
+              title: title,
+              tags: [targetGroup == 'all' ? 'Tous' : targetGroup.toUpperCase()],
+              status: status == 'archived' ? 'ARCHIVÉ' : 'PUBLIÉ',
+              isArchived: status == 'archived',
+            );
+          },
+        );
+      },
     );
   }
 
   Widget _buildAnnouncementCard({
     required BuildContext context,
+    required String docId,
     required Color color,
+    required IconData icon,
     required String type,
     required String time,
     required String title,
     required List<String> tags,
-    required String views,
     required String status,
+    required bool isArchived,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -222,7 +335,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.info, color: color, size: 16),
+                        Icon(icon, color: color, size: 16),
                         const SizedBox(width: 4),
                         Text(type.toUpperCase(), style: AppTextStyles.labelSmall.copyWith(color: color, letterSpacing: 1, fontWeight: FontWeight.bold)),
                       ],
@@ -231,7 +344,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -245,23 +358,82 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                           ),
                           child: Text(tag, style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: colorScheme.onSurfaceVariant)),
                         )),
-                    Icon(Icons.visibility, size: 14, color: colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Text('$views vus', style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: colorScheme.onSurfaceVariant)),
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: colorScheme.primaryContainer.withValues(alpha: 0.2),
+                        color: isArchived 
+                            ? colorScheme.onSurface.withValues(alpha: 0.1)
+                            : colorScheme.primaryContainer.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         children: [
-                          Container(width: 6, height: 6, decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle)),
+                          Container(
+                            width: 6, 
+                            height: 6, 
+                            decoration: BoxDecoration(
+                              color: isArchived ? colorScheme.onSurfaceVariant : colorScheme.primary, 
+                              shape: BoxShape.circle
+                            )
+                          ),
                           const SizedBox(width: 4),
-                          Text(status, style: AppTextStyles.labelSmall.copyWith(fontSize: 10, color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                          Text(
+                            status, 
+                            style: AppTextStyles.labelSmall.copyWith(
+                              fontSize: 10, 
+                              color: isArchived ? colorScheme.onSurfaceVariant : colorScheme.primary, 
+                              fontWeight: FontWeight.bold
+                            )
+                          ),
                         ],
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 18),
+                      color: colorScheme.surface,
+                      onSelected: (value) async {
+                        if (value == 'archive') {
+                          await _firestore.collection('announcements').doc(docId).update({
+                            'status': isArchived ? 'published' : 'archived',
+                          });
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(isArchived ? 'Communiqué republié !' : 'Communiqué archivé !')),
+                            );
+                          }
+                        } else if (value == 'delete') {
+                          await _firestore.collection('announcements').doc(docId).delete();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Communiqué supprimé avec succès !')),
+                            );
+                          }
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: 'archive',
+                          child: Row(
+                            children: [
+                              Icon(isArchived ? Icons.unarchive : Icons.archive, size: 18),
+                              const SizedBox(width: 8),
+                              Text(isArchived ? 'Désarchiver' : 'Archiver'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: AppColors.error),
+                              const SizedBox(width: 8),
+                              Text('Supprimer', style: TextStyle(color: AppColors.error)),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -270,55 +442,6 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildArchivedSection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Archivés (3)', style: AppTextStyles.bodyLarge.copyWith(color: colorScheme.onSurfaceVariant)),
-            Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Opacity(
-          opacity: 0.5,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
-            ),
-            child: Row(
-              children: [
-                Container(width: 4, height: 40, decoration: BoxDecoration(color: colorScheme.outline, borderRadius: BorderRadius.circular(2))),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('ARCHIVES', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant, letterSpacing: 1)),
-                          Text('12 Sep 2024', style: AppTextStyles.labelSmall),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text('Fermeture temporaire de la Bibliothèque Centrale', style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurfaceVariant)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -352,7 +475,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildBottomNavItem(context, Icons.grid_view, 'Dashboard', false, () => context.go('/admin-dashboard')),
-            _buildBottomNavItem(context, Icons.group, 'Users', false, () {}),
+            _buildBottomNavItem(context, Icons.group, 'Users', false, () => context.go('/admin-users')),
             _buildBottomNavItem(context, Icons.notifications_active, 'Alerts', true, () {}),
             _buildBottomNavItem(context, Icons.settings, 'Settings', false, () {}),
           ],
