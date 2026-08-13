@@ -435,7 +435,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                           child: Row(
                             children: [
                               Icon(Icons.delete, size: 18, color: AppColors.error),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               Text('Supprimer', style: TextStyle(color: AppColors.error)),
                             ],
                           ),
