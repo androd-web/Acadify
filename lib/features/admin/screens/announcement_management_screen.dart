@@ -18,6 +18,10 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
   final List<String> _filters = ['Tous', 'Urgent', 'Information', 'Général', 'Archivés'];
   final TextEditingController _searchController = TextEditingController();
 
+  // Coordonnées pour rendre le bouton d'ajout déplaçable
+  double? _fabX;
+  double? _fabY;
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -150,6 +154,10 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                 )
               : null,
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
         ),
       ),
     );
@@ -453,14 +461,34 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
   }
 
   Widget _buildFAB(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    final screenHeight = mediaQuery.size.height;
+
+    // Position par défaut : en bas à gauche (left: 20, à 160px du bas de l'écran pour ne pas chevaucher la barre)
+    final defaultX = 20.0;
+    final defaultY = screenHeight - 160.0;
+
+    final x = _fabX ?? defaultX;
+    final y = _fabY ?? defaultY;
+
     return Positioned(
-      bottom: 100,
-      right: 20,
-      child: FloatingActionButton.extended(
-        onPressed: () => context.push('/admin-compose-announcement'),
-        backgroundColor: AppColors.amber,
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('NOUVEAU', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 1)),
+      left: x,
+      top: y,
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          setState(() {
+            // On limite le déplacement pour que le bouton ne sorte pas de l'écran mola
+            _fabX = (x + details.delta.dx).clamp(10.0, screenWidth - 160.0);
+            _fabY = (y + details.delta.dy).clamp(80.0, screenHeight - 150.0);
+          });
+        },
+        child: FloatingActionButton.extended(
+          onPressed: () => context.push('/admin-compose-announcement'),
+          backgroundColor: AppColors.amber,
+          icon: const Icon(Icons.add, color: Colors.black),
+          label: const Text('NOUVEAU', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        ),
       ),
     );
   }
