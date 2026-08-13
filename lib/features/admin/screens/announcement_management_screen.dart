@@ -465,8 +465,8 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
     final screenWidth = mediaQuery.size.width;
     final screenHeight = mediaQuery.size.height;
 
-    // Position par défaut : en bas à gauche (left: 20, à 160px du bas de l'écran pour ne pas chevaucher la barre)
-    final defaultX = 20.0;
+    // Position par défaut : en bas à droite (screenWidth - 160 pour laisser de la place au bouton)
+    final defaultX = screenWidth - 160.0;
     final defaultY = screenHeight - 160.0;
 
     final x = _fabX ?? defaultX;
@@ -478,9 +478,11 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
       child: GestureDetector(
         onPanUpdate: (details) {
           setState(() {
-            // On limite le déplacement pour que le bouton ne sorte pas de l'écran mola
-            _fabX = (x + details.delta.dx).clamp(10.0, screenWidth - 160.0);
-            _fabY = (y + details.delta.dy).clamp(80.0, screenHeight - 150.0);
+            // On calcule la nouvelle position de manière fluide en ajoutant le delta de déplacement
+            final currentX = _fabX ?? defaultX;
+            final currentY = _fabY ?? defaultY;
+            _fabX = (currentX + details.delta.dx).clamp(10.0, screenWidth - 160.0);
+            _fabY = (currentY + details.delta.dy).clamp(80.0, screenHeight - 150.0);
           });
         },
         child: FloatingActionButton.extended(
