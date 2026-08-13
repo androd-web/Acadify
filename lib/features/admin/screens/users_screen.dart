@@ -77,7 +77,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: selectedRole,
+                      initialValue: selectedRole,
                       decoration: const InputDecoration(
                         labelText: 'Rôle',
                         border: OutlineInputBorder(),
@@ -96,7 +96,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: selectedStatus,
+                      initialValue: selectedStatus,
                       decoration: const InputDecoration(
                         labelText: 'Statut',
                         border: OutlineInputBorder(),
@@ -682,7 +682,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 child: const Row(
                   children: [
                     Icon(Icons.delete, size: 18, color: AppColors.error),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     Text('Supprimer', style: TextStyle(color: AppColors.error)),
                   ],
                 ),
