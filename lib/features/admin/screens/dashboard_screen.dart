@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -14,6 +15,7 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   
   int _studentCount = 0;
   int _teacherCount = 0;
@@ -23,7 +25,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _dynamicActivities = [];
 
+  // Infos de l'administrateur connecté
+  String _adminName = 'Administrateur';
+  String? _adminPhotoUrl;
+
+  // État du système dynamique
+  DateTime _lastSyncTime = DateTime.now();
+  bool _isFirebaseConnected = true;
+
   // Abonnements pour écouter Firestore en temps réel
+  StreamSubscription? _adminSubscription;
   StreamSubscription? _studentsSubscription;
   StreamSubscription? _teachersSubscription;
   StreamSubscription? _announcementsSubscription;
@@ -40,6 +51,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   void dispose() {
     // On libère les abonnements pour éviter les fuites de mémoire, mola
+    _adminSubscription?.cancel();
     _studentsSubscription?.cancel();
     _teachersSubscription?.cancel();
     _announcementsSubscription?.cancel();
@@ -47,6 +59,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _recentAnnouncementsSubscription?.cancel();
     _pendingUsersSubscription?.cancel();
     super.dispose();
+  }
+
+  // Générer la salutation dynamique en fonction de l'heure
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 6 && hour < 18) {
+      return 'Bonjour';
+    } else {
+      return 'Bonsoir';
+    }
   }
 
   // Générer la date du jour dynamiquement en français
@@ -67,6 +89,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _isLoading = true;
     });
 
+    // 0. Écouter les infos de l'admin connecté
+    final currentUser = _auth.currentUser;
+    if (currentUser != null) {
+      _adminSubscription = _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .snapshots()
+          .listen((doc) {
+        if (mounted && doc.exists) {
+          setState(() {
+            _adminName = doc.data()?['name'] ?? 'Administrateur';
+            _adminPhotoUrl = doc.data()?['photoUrl'];
+          });
+        }
+      }, onError: (e) => debugPrint("Erreur chargement profil admin: $e"));
+    }
+
     // 1. Écouter les étudiants en temps réel
     _studentsSubscription = _firestore
         .collection('users')
@@ -76,10 +115,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (mounted) {
         setState(() {
           _studentCount = snapshot.docs.length;
+          _lastSyncTime = DateTime.now();
+          _isFirebaseConnected = true;
           _checkLoadingFinished();
         });
       }
-    }, onError: (e) => debugPrint("Erreur étudiants temps réel: $e"));
+    }, onError: (e) {
+      debugPrint("Erreur étudiants temps réel: $e");
+      if (mounted) setState(() => _isFirebaseConnected = false);
+    });
 
     // 2. Écouter les enseignants en temps réel
     _teachersSubscription = _firestore
@@ -90,6 +134,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (mounted) {
         setState(() {
           _teacherCount = snapshot.docs.length;
+          _lastSyncTime = DateTime.now();
           _checkLoadingFinished();
         });
       }
@@ -103,6 +148,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (mounted) {
         setState(() {
           _announcementCount = snapshot.docs.length;
+          _lastSyncTime = DateTime.now();
           _checkLoadingFinished();
         });
       }
@@ -116,6 +162,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (mounted) {
         setState(() {
           _courseCount = snapshot.docs.length;
+          _lastSyncTime = DateTime.now();
           _checkLoadingFinished();
         });
       }
@@ -130,6 +177,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (mounted) {
         setState(() {
           _pendingUsersCount = snapshot.docs.length;
+          _lastSyncTime = DateTime.now();
           _checkLoadingFinished();
         });
       }
@@ -170,16 +218,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
       try {
         final recentUsers = await _firestore
             .collection('users')
+            .orderBy('createdAt', descending: true)
             .limit(2)
             .get();
 
         for (var doc in recentUsers.docs) {
           final data = doc.data();
           final name = data['name'] ?? 'Utilisateur';
-          final role = data['role'] == 'teacher' ? 'Enseignant' : 'Étudiant';
+          final rawRole = data['role'] ?? 'student';
+          
+          // Correction de la bavure sur les rôles mola !
+          String roleLabel = 'Étudiant';
+          if (rawRole == 'teacher') {
+            roleLabel = 'Enseignant';
+          } else if (rawRole == 'admin') {
+            roleLabel = 'Administrateur';
+          }
+
           tempActivities.add({
             'icon': Icons.person_add,
-            'text': 'Nouvel inscrit ($role) : $name',
+            'text': 'Nouvel inscrit ($roleLabel) : $name',
             'time': 'Actif',
             'color': AppColors.secondary,
           });
@@ -209,7 +267,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _checkLoadingFinished() {
-    // Une fois qu'on a commencé à recevoir des données, on coupe le loader principal
     if (_isLoading) {
       _isLoading = false;
     }
@@ -230,6 +287,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // Permet de forcer manuellement une re-synchro si besoin
   Future<void> _handleRefresh() async {
+    _adminSubscription?.cancel();
     _studentsSubscription?.cancel();
     _teachersSubscription?.cancel();
     _announcementsSubscription?.cancel();
@@ -297,18 +355,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           child: Row(
             children: [
-              Icon(Icons.menu, color: colorScheme.onSurface),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Acadify UIECC',
-                  style: AppTextStyles.headlineMedium.copyWith(
-                    color: colorScheme.primary, 
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+              // Retrait du menu burger inutile mola
+              Text(
+                'Acadify UIECC',
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: colorScheme.primary, 
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(width: 8),
               Container(
@@ -322,16 +377,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                 ),
               ),
-              const SizedBox(width: 12),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2), width: 2),
-                  image: const DecorationImage(
-                    image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuDf1JxLqy0RD6QMsoeVR2c45nAwlbXO2AUXHBmvBSVyt46DMOCaNRzc4ltRZVKmcxFnr3YuUgHLy4apf5RIoZ_YmfKIgXcbJZprSwgYbJCRw-YcCYQLPoNUSQM6Rf1fHUnJh1I1rYk7ghmUcWfRrmGvPvqTCHZ1nBu9oGlbTiElqBLMrVl-4ms9wtaEpqT_Yvz8cpnNS4PNXNikFwaWIC9lBKtGb7djbMJYwAtsdGkRfyyIq8cPTQoBRGIR1faM8xpPDvkRTG5lSlhH'),
-                    fit: BoxFit.cover,
+              const Spacer(),
+              // Cercle de profil cliquable et dynamique
+              GestureDetector(
+                onTap: () => context.push('/profile'),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2), width: 2),
+                    color: colorScheme.surfaceContainer,
+                  ),
+                  child: ClipOval(
+                    child: _adminPhotoUrl != null && _adminPhotoUrl!.isNotEmpty
+                        ? Image.network(
+                            _adminPhotoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.person,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          )
+                        : Icon(
+                            Icons.person,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                   ),
                 ),
               ),
@@ -369,20 +440,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         const SizedBox(height: 12),
+        // Salutation chaleureuse et dynamique avec le nom de l'admin
         Text(
-          'Tableau de bord — UIECC',
-          style: AppTextStyles.headlineLarge.copyWith(color: colorScheme.onSurface, fontSize: 26),
+          '${_getGreeting()}, $_adminName',
+          style: AppTextStyles.headlineLarge.copyWith(color: colorScheme.onSurface, fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        Row(
-          children: [
-            Icon(Icons.location_on, color: colorScheme.primary, size: 16),
-            const SizedBox(width: 4),
-            Text(
-              'Administration · Sangmélima',
-              style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurfaceVariant),
-            ),
-          ],
+        Text(
+          'Tableau de bord',
+          style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -453,7 +519,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'Étudiants actifs', 
           Icons.group, 
           colorScheme.secondary, 
-          _isLoading ? '' : 'Live'
+          _isLoading ? '' : 'Live',
+          () => context.push('/admin-users'), // Redirection vers la gestion des utilisateurs
         ),
         _buildKPICard(
           context, 
@@ -461,7 +528,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'Enseignants', 
           Icons.school, 
           const Color(0xFFFFB300), 
-          _isLoading ? '' : 'Live'
+          _isLoading ? '' : 'Live',
+          () => context.push('/admin-users'), // Redirection vers la gestion des utilisateurs
         ),
         _buildKPICard(
           context, 
@@ -469,7 +537,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'Communiqués', 
           Icons.campaign, 
           colorScheme.primary, 
-          _isLoading ? '' : 'Live'
+          _isLoading ? '' : 'Live',
+          () => context.push('/admin-announcements'), // Redirection vers la gestion des communiqués
         ),
         _buildKPICard(
           context, 
@@ -477,66 +546,71 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'Cours créés', 
           Icons.folder_open, 
           const Color(0xFFFFB300), 
-          _isLoading ? '' : 'Live'
+          _isLoading ? '' : 'Live',
+          () => context.push('/admin-announcements'), // Redirection vers les cours/annonces
         ),
       ],
     );
   }
 
-  Widget _buildKPICard(BuildContext context, String value, String label, IconData icon, Color color, String trend) {
+  Widget _buildKPICard(BuildContext context, String value, String label, IconData icon, Color color, String trend, VoidCallback onTap) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              if (trend.isNotEmpty)
-                Text(
-                  trend, 
-                  style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.bold, fontSize: 10)
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(icon, color: color, size: 18),
                 ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      value, 
-                      style: AppTextStyles.headlineLarge.copyWith(fontSize: 24, color: colorScheme.onSurface, fontWeight: FontWeight.bold)
-                    ),
-                  ),
+                if (trend.isNotEmpty)
                   Text(
-                    label, 
-                    style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    trend, 
+                    style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.bold, fontSize: 10)
                   ),
-                ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        value, 
+                        style: AppTextStyles.headlineLarge.copyWith(fontSize: 24, color: colorScheme.onSurface, fontWeight: FontWeight.bold)
+                      ),
+                    ),
+                    Text(
+                      label, 
+                      style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant, fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -613,6 +687,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildSystemHealth(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    
+    // Formatage de la dernière synchro en temps réel
+    final syncHour = "${_lastSyncTime.hour.toString().padLeft(2, '0')}:${_lastSyncTime.minute.toString().padLeft(2, '0')}:${_lastSyncTime.second.toString().padLeft(2, '0')}";
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -631,9 +709,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
           const SizedBox(height: 16),
-          _buildHealthRow(context, 'Firebase connection', 'Connecté', true),
-          _buildHealthRow(context, 'Notifications FCM', 'Opérationnel', true),
-          _buildHealthRow(context, 'Dernière synchro', 'À l\'instant', null),
+          _buildHealthRow(context, 'Firebase connection', _isFirebaseConnected ? 'Connecté' : 'Déconnecté', _isFirebaseConnected),
+          _buildHealthRow(context, 'Notifications FCM', _isFirebaseConnected ? 'Opérationnel' : 'Ralenti', _isFirebaseConnected),
+          _buildHealthRow(context, 'Dernière synchro', syncHour, null),
           const SizedBox(height: 12),
           Text('Storage usage (234 Mo / 1 Go)', style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurface, fontSize: 11)),
           const SizedBox(height: 8),
@@ -672,7 +750,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 status, 
                 style: AppTextStyles.bodySmall.copyWith(
                   fontWeight: FontWeight.bold, 
-                  color: isPositive == true ? colorScheme.secondary : colorScheme.onSurface,
+                  color: isPositive == true ? colorScheme.secondary : (isPositive == false ? colorScheme.error : colorScheme.onSurface),
                   fontSize: 12
                 )
               ),
