@@ -17,6 +17,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   String _selectedFilter = 'Tous';
   int _currentNavIndex = 2; // Index par défaut pour "Users"
 
+  // Coordonnées pour le bouton d'ajout déplaçable
+  double? _fabX;
+  double? _fabY;
+
   // Contrôleur pour la recherche
   final TextEditingController _searchController = TextEditingController();
 
@@ -190,7 +194,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Positioned(
       top: 0,
       left: 0,
@@ -201,15 +204,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.menu, color: AppColors.primary),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Menu latéral cliqué !')),
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
               Text(
                 'University Admin',
                 style: AppTextStyles.headlineMedium.copyWith(
@@ -218,25 +212,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Profil administrateur cliqué !')),
-                  );
-                },
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-                    image: const DecorationImage(
-                      image: NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuCdt98Rj3-eCBzf_xmlbfVm02ODF0sIbpv6ac1go-sE4Valvc_tSrrJ_SDVRuS9vCFy_arck1ja4I3AJc_w1-Umu9AraBKIaJ1hnEygKfBZukxenOrP_XvOS-ube41m8a9hkbIxlIhvGztDYl9jbrwvPs-Nwuey-k3iE9R3yVOAPMnRzGGYmq49JVawqNknIUhknCsa9TPsvM7Kvs36YfaO9022LHI0FX5OYBWXF0mWa9mdPyjAnU8YYNIMoLqw64Oxc3rIEDZLVmKh'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -284,7 +259,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
             _buildStatCard(context, 'Étudiants', '$students', AppColors.primary, () {
               setState(() => _selectedFilter = 'Étudiants');
             }),
-            _buildStatCard(context, 'Enseignants', '$teachers', AppColors.secondaryContainer, () {
+            _buildStatCard(context, 'Enseignants', '$teachers', AppColors.amber, () {
               setState(() => _selectedFilter = 'Enseignants');
             }),
             _buildStatCard(context, 'En attente', '$pending', Colors.orange, () {
@@ -527,9 +502,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (role == 'Étudiant') {
       roleColor = AppColors.primary;
     } else if (role == 'Enseignant') {
-      roleColor = AppColors.secondaryContainer;
+      roleColor = AppColors.amber; // Orange comme demandé
     } else {
-      roleColor = const Color(0xFF974946);
+      roleColor = const Color(0xFF974946); // Rouge pour Admin
     }
 
     return Container(
@@ -695,19 +670,31 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Widget _buildFAB(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final defaultX = size.width - 160.0;
+    final defaultY = size.height - 180.0;
+
     return Positioned(
-      bottom: 100,
-      right: 20,
-      child: ElevatedButton.icon(
-        onPressed: () => context.push('/admin-add-user'),
-        icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('Ajouter', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.amber,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-          elevation: 10,
-          shadowColor: Colors.black.withValues(alpha: 0.4),
+      left: _fabX ?? defaultX,
+      top: _fabY ?? defaultY,
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          setState(() {
+            _fabX = (_fabX ?? defaultX) + details.delta.dx;
+            _fabY = (_fabY ?? defaultY) + details.delta.dy;
+          });
+        },
+        child: ElevatedButton.icon(
+          onPressed: () => context.push('/admin-add-user'),
+          icon: const Icon(Icons.add, color: Colors.black),
+          label: const Text('Ajouter', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.amber,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            elevation: 10,
+            shadowColor: Colors.black.withValues(alpha: 0.4),
+          ),
         ),
       ),
     );
