@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -11,18 +10,19 @@ class AdminComposeAnnouncement extends StatefulWidget {
   const AdminComposeAnnouncement({super.key});
 
   @override
-  State<AdminComposeAnnouncement> createState() => _AdminComposeAnnouncementState();
+  State<AdminComposeAnnouncement> createState() =>
+      _AdminComposeAnnouncementState();
 }
 
 class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
 
   String _selectedCategory = 'Urgent';
   String _selectedTarget = 'all'; // 'all', 'filiere', 'niveau'
-  
+
   // Variables pour les sélections dynamiques
   String _selectedFiliere = 'Toutes';
   String _selectedNiveau = 'Tous';
@@ -31,12 +31,29 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   PlatformFile? _selectedFile;
   bool _isPublishing = false;
 
-  final List<String> _filieres = ['Toutes', 'Génie Logiciel', 'Réseaux et Sécurité', 'Génie Civil', 'Management'];
-  final List<String> _niveaux = ['Tous', 'Niveau 1', 'Niveau 2', 'Niveau 3', 'Niveau 4', 'Niveau 5'];
+  final List<String> _filieres = [
+    'Toutes',
+    'Génie Logiciel',
+    'Réseaux et Sécurité',
+    'Génie Civil',
+    'Management',
+  ];
+  final List<String> _niveaux = [
+    'Tous',
+    'Niveau 1',
+    'Niveau 2',
+    'Niveau 3',
+    'Niveau 4',
+    'Niveau 5',
+  ];
 
   List<Map<String, dynamic>> _getCategories(ColorScheme colorScheme) => [
     {'label': 'Urgent', 'icon': Icons.campaign, 'color': colorScheme.error},
-    {'label': 'Information', 'icon': Icons.info, 'color': colorScheme.secondary},
+    {
+      'label': 'Information',
+      'icon': Icons.info,
+      'color': colorScheme.secondary,
+    },
     {'label': 'Général', 'icon': Icons.public, 'color': colorScheme.primary},
   ];
 
@@ -59,45 +76,62 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     }
 
     final selectedText = text.substring(selection.start, selection.end);
-    final newText = text.replaceRange(selection.start, selection.end, '$prefix$selectedText$suffix');
-    
+    final newText = text.replaceRange(
+      selection.start,
+      selection.end,
+      '$prefix$selectedText$suffix',
+    );
+
     _bodyController.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: selection.start + prefix.length + selectedText.length + suffix.length),
+      selection: TextSelection.collapsed(
+        offset:
+            selection.start +
+            prefix.length +
+            selectedText.length +
+            suffix.length,
+      ),
     );
   }
 
   // Sélectionner un fichier PDF
   Future<void> _pickPDF() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
 
-      if (result != null && result.files.isNotEmpty) {
+      if (result.isNotEmpty) {
         setState(() {
-          _selectedFile = result.files.first;
+          _selectedFile = result.first;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Fichier sélectionné : ${_selectedFile!.name}')),
+            SnackBar(
+              content: Text('Fichier sélectionné : ${_selectedFile!.name}'),
+            ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de la sélection du fichier : $e')),
+          SnackBar(
+            content: Text('Erreur lors de la sélection du fichier : $e'),
+          ),
         );
       }
     }
   }
 
   Future<void> _publishAnnouncement() async {
-    if (_titleController.text.trim().isEmpty || _bodyController.text.trim().isEmpty) {
+    if (_titleController.text.trim().isEmpty ||
+        _bodyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le titre et le contenu sont requis, mola !')),
+        const SnackBar(
+          content: Text('Le titre et le contenu sont requis, mola !'),
+        ),
       );
       return;
     }
@@ -114,9 +148,13 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       // Détermination de la cible exacte
       String finalTarget = 'all';
       if (_selectedTarget == 'filiere') {
-        finalTarget = _selectedFiliere == 'Toutes' ? 'all' : 'filiere_${_selectedFiliere.toLowerCase()}';
+        finalTarget = _selectedFiliere == 'Toutes'
+            ? 'all'
+            : 'filiere_${_selectedFiliere.toLowerCase()}';
       } else if (_selectedTarget == 'niveau') {
-        finalTarget = _selectedNiveau == 'Tous' ? 'all' : 'niveau_${_selectedNiveau.toLowerCase()}';
+        finalTarget = _selectedNiveau == 'Tous'
+            ? 'all'
+            : 'niveau_${_selectedNiveau.toLowerCase()}';
       }
 
       final announcementData = {
@@ -127,7 +165,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         'createdAt': FieldValue.serverTimestamp(),
         'authorUid': 'admin_uid',
         'authorName': 'Administrateur',
-        'attachmentUrl': _selectedFile != null ? _selectedFile!.name : null, // Simulation d'upload
+        'attachmentUrl': _selectedFile?.name, // Simulation d'upload
         'status': 'published',
       };
 
@@ -157,7 +195,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
@@ -165,29 +203,29 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           _buildAppBar(context),
           Positioned.fill(
             top: 80,
-            child: _isPublishing 
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24),
-                      _buildTitleSection(context),
-                      const SizedBox(height: 32),
-                      _buildCategorySection(context),
-                      const SizedBox(height: 32),
-                      _buildContentSection(context),
-                      const SizedBox(height: 32),
-                      _buildTargetSection(context),
-                      const SizedBox(height: 32),
-                      _buildAttachmentSection(context),
-                      const SizedBox(height: 32),
-                      _buildNotificationNotice(context),
-                      const SizedBox(height: 120),
-                    ],
+            child: _isPublishing
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 24),
+                        _buildTitleSection(context),
+                        const SizedBox(height: 32),
+                        _buildCategorySection(context),
+                        const SizedBox(height: 32),
+                        _buildContentSection(context),
+                        const SizedBox(height: 32),
+                        _buildTargetSection(context),
+                        const SizedBox(height: 32),
+                        _buildAttachmentSection(context),
+                        const SizedBox(height: 32),
+                        _buildNotificationNotice(context),
+                        const SizedBox(height: 120),
+                      ],
+                    ),
                   ),
-                ),
           ),
           if (!_isPublishing) _buildBottomAction(context),
         ],
@@ -208,7 +246,11 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: theme.scaffoldBackgroundColor.withValues(alpha: 0.8),
-            border: Border(bottom: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
+            border: Border(
+              bottom: BorderSide(
+                color: colorScheme.onSurface.withValues(alpha: 0.05),
+              ),
+            ),
           ),
           child: Row(
             children: [
@@ -221,7 +263,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 child: Text(
                   'Nouveau communiqué',
                   style: AppTextStyles.headlineMedium.copyWith(
-                    color: colorScheme.onSurface, 
+                    color: colorScheme.onSurface,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -229,16 +271,31 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainer,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   children: [
-                    Container(width: 8, height: 8, decoration: BoxDecoration(color: colorScheme.outline, shape: BoxShape.circle)),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colorScheme.outline,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     const SizedBox(width: 6),
-                    Text('Brouillon', style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant)),
+                    Text(
+                      'Brouillon',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -257,21 +314,39 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('EN-TÊTE', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
-            Text('${_titleController.text.length}/100', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
+            Text(
+              'EN-TÊTE',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                letterSpacing: 2,
+              ),
+            ),
+            Text(
+              '${_titleController.text.length}/100',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _titleController,
           onChanged: (v) => setState(() {}),
-          style: AppTextStyles.headlineLarge.copyWith(color: colorScheme.onSurface, fontSize: 22),
+          style: AppTextStyles.headlineLarge.copyWith(
+            color: colorScheme.onSurface,
+            fontSize: 22,
+          ),
           decoration: InputDecoration(
             hintText: 'Titre de l\'annonce...',
-            hintStyle: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.2)),
+            hintStyle: TextStyle(
+              color: colorScheme.onSurface.withValues(alpha: 0.2),
+            ),
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
-            focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.amber)),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: AppColors.amber),
+            ),
           ),
           maxLines: null,
         ),
@@ -285,7 +360,13 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('CATÉGORIE *', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
+        Text(
+          'CATÉGORIE *',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            letterSpacing: 2,
+          ),
+        ),
         const SizedBox(height: 16),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -298,20 +379,39 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                   onTap: () => setState(() => _selectedCategory = cat['label']),
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isActive ? cat['color'].withValues(alpha: 0.1) : colorScheme.onSurface.withValues(alpha: 0.05),
+                      color: isActive
+                          ? cat['color'].withValues(alpha: 0.1)
+                          : colorScheme.onSurface.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: isActive ? cat['color'].withValues(alpha: 0.3) : colorScheme.onSurface.withValues(alpha: 0.1)),
+                      border: Border.all(
+                        color: isActive
+                            ? cat['color'].withValues(alpha: 0.3)
+                            : colorScheme.onSurface.withValues(alpha: 0.1),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(cat['icon'], color: isActive ? cat['color'] : colorScheme.onSurfaceVariant, size: 18),
+                        Icon(
+                          cat['icon'],
+                          color: isActive
+                              ? cat['color']
+                              : colorScheme.onSurfaceVariant,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           cat['label'],
-                          style: AppTextStyles.labelMedium.copyWith(color: isActive ? cat['color'] : colorScheme.onSurfaceVariant),
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: isActive
+                                ? cat['color']
+                                : colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
@@ -333,8 +433,19 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('CONTENU DU COMMUNIQUÉ *', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
-            Text('${_bodyController.text.length}/2000', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant)),
+            Text(
+              'CONTENU DU COMMUNIQUÉ *',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                letterSpacing: 2,
+              ),
+            ),
+            Text(
+              '${_bodyController.text.length}/2000',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -342,7 +453,9 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
+            border: Border.all(
+              color: colorScheme.onSurface.withValues(alpha: 0.05),
+            ),
           ),
           child: Column(
             children: [
@@ -350,7 +463,11 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: colorScheme.onSurface.withValues(alpha: 0.02),
-                  border: Border(bottom: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: colorScheme.onSurface.withValues(alpha: 0.05),
+                    ),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -362,13 +479,24 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                     }),
                     _buildToolButton(context, Icons.copy, () {
                       if (_bodyController.text.isNotEmpty) {
-                        Clipboard.setData(ClipboardData(text: _bodyController.text));
+                        Clipboard.setData(
+                          ClipboardData(text: _bodyController.text),
+                        );
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Contenu copié dans le presse-papiers !')),
+                          const SnackBar(
+                            content: Text(
+                              'Contenu copié dans le presse-papiers !',
+                            ),
+                          ),
                         );
                       }
                     }),
-                    SizedBox(width: 8, child: VerticalDivider(color: colorScheme.onSurface.withValues(alpha: 0.1))),
+                    SizedBox(
+                      width: 8,
+                      child: VerticalDivider(
+                        color: colorScheme.onSurface.withValues(alpha: 0.1),
+                      ),
+                    ),
                     _buildToolButton(context, Icons.link, () {
                       _applyFormat('[', '](url)');
                     }),
@@ -382,7 +510,9 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
                   hintText: 'Rédigez votre message ici...',
-                  hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+                  hintStyle: TextStyle(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                  ),
                   contentPadding: const EdgeInsets.all(16),
                   border: InputBorder.none,
                 ),
@@ -394,7 +524,11 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     );
   }
 
-  Widget _buildToolButton(BuildContext context, IconData icon, VoidCallback onPressed) {
+  Widget _buildToolButton(
+    BuildContext context,
+    IconData icon,
+    VoidCallback onPressed,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return IconButton(
       icon: Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
@@ -408,29 +542,44 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('DESTINATAIRES *', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
+        Text(
+          'DESTINATAIRES *',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            letterSpacing: 2,
+          ),
+        ),
         const SizedBox(height: 16),
-        _buildTargetCard(context, 'Toute l\'université', 'Tous les étudiants et enseignants', _selectedTarget == 'all', () {
-          setState(() => _selectedTarget = 'all');
-        }),
+        _buildTargetCard(
+          context,
+          'Toute l\'université',
+          'Tous les étudiants et enseignants',
+          _selectedTarget == 'all',
+          () {
+            setState(() => _selectedTarget = 'all');
+          },
+        ),
         const SizedBox(height: 12),
-        _buildTargetCard(context, 'Par filière', 'Sélectionnez une filière spécifique', _selectedTarget == 'filiere', () {
-          setState(() => _selectedTarget = 'filiere');
-        }),
+        _buildTargetCard(
+          context,
+          'Par filière',
+          'Sélectionnez une filière spécifique',
+          _selectedTarget == 'filiere',
+          () {
+            setState(() => _selectedTarget = 'filiere');
+          },
+        ),
         if (_selectedTarget == 'filiere') ...[
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _selectedFiliere,
+            initialValue: _selectedFiliere,
             dropdownColor: colorScheme.surface,
             decoration: const InputDecoration(
               labelText: 'Choisir la filière',
               border: OutlineInputBorder(),
             ),
             items: _filieres.map((filiere) {
-              return DropdownMenuItem(
-                value: filiere,
-                child: Text(filiere),
-              );
+              return DropdownMenuItem(value: filiere, child: Text(filiere));
             }).toList(),
             onChanged: (value) {
               if (value != null) {
@@ -442,23 +591,26 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           ),
         ],
         const SizedBox(height: 12),
-        _buildTargetCard(context, 'Par niveau', 'Sélectionnez un niveau spécifique', _selectedTarget == 'niveau', () {
-          setState(() => _selectedTarget = 'niveau');
-        }),
+        _buildTargetCard(
+          context,
+          'Par niveau',
+          'Sélectionnez un niveau spécifique',
+          _selectedTarget == 'niveau',
+          () {
+            setState(() => _selectedTarget = 'niveau');
+          },
+        ),
         if (_selectedTarget == 'niveau') ...[
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _selectedNiveau,
+            initialValue: _selectedNiveau,
             dropdownColor: colorScheme.surface,
             decoration: const InputDecoration(
               labelText: 'Choisir le niveau',
               border: OutlineInputBorder(),
             ),
             items: _niveaux.map((niveau) {
-              return DropdownMenuItem(
-                value: niveau,
-                child: Text(niveau),
-              );
+              return DropdownMenuItem(value: niveau, child: Text(niveau));
             }).toList(),
             onChanged: (value) {
               if (value != null) {
@@ -473,7 +625,13 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     );
   }
 
-  Widget _buildTargetCard(BuildContext context, String title, String subtitle, bool isSelected, VoidCallback onTap) {
+  Widget _buildTargetCard(
+    BuildContext context,
+    String title,
+    String subtitle,
+    bool isSelected,
+    VoidCallback onTap,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
@@ -483,14 +641,22 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         decoration: BoxDecoration(
           color: colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: isSelected 
-            ? BorderDirectional(
-                start: const BorderSide(color: AppColors.amber, width: 4),
-                top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-                bottom: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-                end: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-              )
-            : Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
+          border: isSelected
+              ? BorderDirectional(
+                  start: const BorderSide(color: AppColors.amber, width: 4),
+                  top: BorderSide(
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
+                  ),
+                  bottom: BorderSide(
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
+                  ),
+                  end: BorderSide(
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
+                  ),
+                )
+              : Border.all(
+                  color: colorScheme.onSurface.withValues(alpha: 0.08),
+                ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -499,13 +665,27 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-                  Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
+                  Text(
+                    title,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.6,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            if (isSelected) const Icon(Icons.check_circle, color: AppColors.amber)
-            else Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
+            if (isSelected)
+              const Icon(Icons.check_circle, color: AppColors.amber)
+            else
+              Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -523,19 +703,29 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         decoration: BoxDecoration(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1), width: 2, style: BorderStyle.solid),
+          border: Border.all(
+            color: colorScheme.onSurface.withValues(alpha: 0.1),
+            width: 2,
+            style: BorderStyle.solid,
+          ),
         ),
         child: Column(
           children: [
             Icon(
-              _selectedFile != null ? Icons.check_circle : Icons.picture_as_pdf, 
-              size: 32, 
-              color: _selectedFile != null ? AppColors.primary : colorScheme.onSurfaceVariant
+              _selectedFile != null ? Icons.check_circle : Icons.picture_as_pdf,
+              size: 32,
+              color: _selectedFile != null
+                  ? AppColors.primary
+                  : colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedFile != null ? 'PDF sélectionné : ${_selectedFile!.name}' : '+ Ajouter un PDF', 
-              style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant),
+              _selectedFile != null
+                  ? 'PDF sélectionné : ${_selectedFile!.name}'
+                  : '+ Ajouter un PDF',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -556,12 +746,18 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.notifications_active, color: AppColors.amber, size: 20),
+          const Icon(
+            Icons.notifications_active,
+            color: AppColors.amber,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               'Une notification push sera envoyée immédiatement aux destinataires lors de la publication.',
-              style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurface),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: colorScheme.onSurface,
+              ),
             ),
           ),
         ],
@@ -579,7 +775,11 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: theme.scaffoldBackgroundColor.withValues(alpha: 0.95),
-          border: Border(top: BorderSide(color: theme.colorScheme.onSurface.withValues(alpha: 0.05))),
+          border: Border(
+            top: BorderSide(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.05),
+            ),
+          ),
         ),
         child: ElevatedButton(
           onPressed: _publishAnnouncement,
@@ -587,14 +787,22 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
             backgroundColor: AppColors.amber,
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
             elevation: 10,
             shadowColor: AppColors.amber.withValues(alpha: 0.3),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Publier le communiqué', style: AppTextStyles.headlineMedium.copyWith(color: Colors.black, fontSize: 18)),
+              Text(
+                'Publier le communiqué',
+                style: AppTextStyles.headlineMedium.copyWith(
+                  color: Colors.black,
+                  fontSize: 18,
+                ),
+              ),
               const SizedBox(width: 8),
               const Icon(Icons.send),
             ],
