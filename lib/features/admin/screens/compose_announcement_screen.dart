@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -19,7 +22,17 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
 
   String _selectedCategory = 'Urgent';
   String _selectedTarget = 'all'; // 'all', 'filiere', 'niveau'
+  
+  // Variables pour les sélections dynamiques
+  String _selectedFiliere = 'Toutes';
+  String _selectedNiveau = 'Tous';
+
+  // Fichier PDF sélectionné
+  PlatformFile? _selectedFile;
   bool _isPublishing = false;
+
+  final List<String> _filieres = ['Toutes', 'Génie Logiciel', 'Réseaux et Sécurité', 'Génie Civil', 'Management'];
+  final List<String> _niveaux = ['Tous', 'Niveau 1', 'Niveau 2', 'Niveau 3', 'Niveau 4', 'Niveau 5'];
 
   List<Map<String, dynamic>> _getCategories(ColorScheme colorScheme) => [
     {'label': 'Urgent', 'icon': Icons.campaign, 'color': colorScheme.error},
@@ -32,6 +45,53 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     _titleController.dispose();
     _bodyController.dispose();
     super.dispose();
+  }
+
+  // Fonction pour appliquer le formatage de texte
+  void _applyFormat(String prefix, String suffix) {
+    final text = _bodyController.text;
+    final selection = _bodyController.selection;
+
+    if (selection.start == -1 || selection.end == -1) {
+      // Pas de sélection, on ajoute juste à la fin
+      _bodyController.text = text + prefix + suffix;
+      return;
+    }
+
+    final selectedText = text.substring(selection.start, selection.end);
+    final newText = text.replaceRange(selection.start, selection.end, '$prefix$selectedText$suffix');
+    
+    _bodyController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: selection.start + prefix.length + selectedText.length + suffix.length),
+    );
+  }
+
+  // Sélectionner un fichier PDF
+  Future<void> _pickPDF() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _selectedFile = result.files.first;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Fichier sélectionné : ${_selectedFile!.name}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de la sélection du fichier : $e')),
+        );
+      }
+    }
   }
 
   Future<void> _publishAnnouncement() async {
@@ -51,15 +111,24 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       if (_selectedCategory == 'Urgent') categoryKey = 'urgent';
       if (_selectedCategory == 'Général') categoryKey = 'general';
 
+      // Détermination de la cible exacte
+      String finalTarget = 'all';
+      if (_selectedTarget == 'filiere') {
+        finalTarget = _selectedFiliere == 'Toutes' ? 'all' : 'filiere_${_selectedFiliere.toLowerCase()}';
+      } else if (_selectedTarget == 'niveau') {
+        finalTarget = _selectedNiveau == 'Tous' ? 'all' : 'niveau_${_selectedNiveau.toLowerCase()}';
+      }
+
       final announcementData = {
         'title': _titleController.text.trim(),
         'body': _bodyController.text.trim(),
         'category': categoryKey,
-        'targetGroup': _selectedTarget,
+        'targetGroup': finalTarget,
         'createdAt': FieldValue.serverTimestamp(),
         'authorUid': 'admin_uid',
         'authorName': 'Administrateur',
-        'attachmentUrl': null,
+        'attachmentUrl': _selectedFile != null ? _selectedFile!.name : null, // Simulation d'upload
+        'status': 'published',
       };
 
       await _firestore.collection('announcements').add(announcementData);
@@ -148,11 +217,17 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 onPressed: () => context.pop(),
               ),
               const SizedBox(width: 8),
-              Text(
-                'Nouveau communiqué',
-                style: AppTextStyles.headlineMedium.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  'Nouveau communiqué',
+                  style: AppTextStyles.headlineMedium.copyWith(
+                    color: colorScheme.onSurface, 
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
@@ -190,7 +265,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         TextField(
           controller: _titleController,
           onChanged: (v) => setState(() {}),
-          style: AppTextStyles.headlineLarge.copyWith(color: colorScheme.onSurface),
+          style: AppTextStyles.headlineLarge.copyWith(color: colorScheme.onSurface, fontSize: 22),
           decoration: InputDecoration(
             hintText: 'Titre de l\'annonce...',
             hintStyle: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.2)),
@@ -212,34 +287,39 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       children: [
         Text('CATÉGORIE *', style: AppTextStyles.labelSmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5), letterSpacing: 2)),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          children: categories.map((cat) {
-            final isActive = _selectedCategory == cat['label'];
-            return InkWell(
-              onTap: () => setState(() => _selectedCategory = cat['label']),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isActive ? cat['color'].withValues(alpha: 0.1) : colorScheme.onSurface.withValues(alpha: 0.05),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: categories.map((cat) {
+              final isActive = _selectedCategory == cat['label'];
+              return Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: InkWell(
+                  onTap: () => setState(() => _selectedCategory = cat['label']),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isActive ? cat['color'].withValues(alpha: 0.3) : colorScheme.onSurface.withValues(alpha: 0.1)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(cat['icon'], color: isActive ? cat['color'] : colorScheme.onSurfaceVariant, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      cat['label'],
-                      style: AppTextStyles.labelMedium.copyWith(color: isActive ? cat['color'] : colorScheme.onSurfaceVariant),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isActive ? cat['color'].withValues(alpha: 0.1) : colorScheme.onSurface.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isActive ? cat['color'].withValues(alpha: 0.3) : colorScheme.onSurface.withValues(alpha: 0.1)),
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(cat['icon'], color: isActive ? cat['color'] : colorScheme.onSurfaceVariant, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          cat['label'],
+                          style: AppTextStyles.labelMedium.copyWith(color: isActive ? cat['color'] : colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -274,11 +354,24 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 ),
                 child: Row(
                   children: [
-                    _buildToolButton(context, Icons.format_bold),
-                    _buildToolButton(context, Icons.format_italic),
-                    _buildToolButton(context, Icons.format_list_bulleted),
+                    _buildToolButton(context, Icons.format_bold, () {
+                      _applyFormat('**', '**');
+                    }),
+                    _buildToolButton(context, Icons.format_italic, () {
+                      _applyFormat('*', '*');
+                    }),
+                    _buildToolButton(context, Icons.copy, () {
+                      if (_bodyController.text.isNotEmpty) {
+                        Clipboard.setData(ClipboardData(text: _bodyController.text));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Contenu copié dans le presse-papiers !')),
+                        );
+                      }
+                    }),
                     SizedBox(width: 8, child: VerticalDivider(color: colorScheme.onSurface.withValues(alpha: 0.1))),
-                    _buildToolButton(context, Icons.link),
+                    _buildToolButton(context, Icons.link, () {
+                      _applyFormat('[', '](url)');
+                    }),
                   ],
                 ),
               ),
@@ -301,11 +394,11 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     );
   }
 
-  Widget _buildToolButton(BuildContext context, IconData icon) {
+  Widget _buildToolButton(BuildContext context, IconData icon, VoidCallback onPressed) {
     final colorScheme = Theme.of(context).colorScheme;
     return IconButton(
       icon: Icon(icon, size: 20, color: colorScheme.onSurfaceVariant),
-      onPressed: () {},
+      onPressed: onPressed,
       visualDensity: VisualDensity.compact,
     );
   }
@@ -324,10 +417,58 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         _buildTargetCard(context, 'Par filière', 'Sélectionnez une filière spécifique', _selectedTarget == 'filiere', () {
           setState(() => _selectedTarget = 'filiere');
         }),
+        if (_selectedTarget == 'filiere') ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedFiliere,
+            dropdownColor: colorScheme.surface,
+            decoration: const InputDecoration(
+              labelText: 'Choisir la filière',
+              border: OutlineInputBorder(),
+            ),
+            items: _filieres.map((filiere) {
+              return DropdownMenuItem(
+                value: filiere,
+                child: Text(filiere),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _selectedFiliere = value;
+                });
+              }
+            },
+          ),
+        ],
         const SizedBox(height: 12),
         _buildTargetCard(context, 'Par niveau', 'Sélectionnez un niveau spécifique', _selectedTarget == 'niveau', () {
           setState(() => _selectedTarget = 'niveau');
         }),
+        if (_selectedTarget == 'niveau') ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedNiveau,
+            dropdownColor: colorScheme.surface,
+            decoration: const InputDecoration(
+              labelText: 'Choisir le niveau',
+              border: OutlineInputBorder(),
+            ),
+            items: _niveaux.map((niveau) {
+              return DropdownMenuItem(
+                value: niveau,
+                child: Text(niveau),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _selectedNiveau = value;
+                });
+              }
+            },
+          ),
+        ],
       ],
     );
   }
@@ -354,12 +495,14 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-                Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+                  Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
+                ],
+              ),
             ),
             if (isSelected) const Icon(Icons.check_circle, color: AppColors.amber)
             else Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
@@ -371,20 +514,32 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
 
   Widget _buildAttachmentSection(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1), width: 2, style: BorderStyle.solid),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.picture_as_pdf, size: 32, color: colorScheme.onSurfaceVariant),
-          const SizedBox(height: 8),
-          Text('+ Ajouter un PDF', style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant)),
-        ],
+    return InkWell(
+      onTap: _pickPDF,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1), width: 2, style: BorderStyle.solid),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              _selectedFile != null ? Icons.check_circle : Icons.picture_as_pdf, 
+              size: 32, 
+              color: _selectedFile != null ? AppColors.primary : colorScheme.onSurfaceVariant
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _selectedFile != null ? 'PDF sélectionné : ${_selectedFile!.name}' : '+ Ajouter un PDF', 
+              style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
