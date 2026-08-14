@@ -24,27 +24,29 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   String _selectedTarget = 'all'; // 'all', 'filiere', 'niveau'
 
   // Variables pour les sélections dynamiques
-  String _selectedFiliere = 'Toutes';
+  String _selectedFiliere = 'Tous';
   String _selectedNiveau = 'Tous';
 
   // Fichier PDF sélectionné
   PlatformFile? _selectedFile;
   bool _isPublishing = false;
 
+  // Récupération des filières exactes depuis l'inscription
   final List<String> _filieres = [
-    'Toutes',
-    'Génie Logiciel',
-    'Réseaux et Sécurité',
-    'Génie Civil',
-    'Management',
+    'Tous',
+    'ISN',
+    'CDN',
+    'INS',
   ];
+
+  // Récupération des niveaux exacts depuis l'inscription
   final List<String> _niveaux = [
     'Tous',
-    'Niveau 1',
-    'Niveau 2',
-    'Niveau 3',
-    'Niveau 4',
-    'Niveau 5',
+    'L1',
+    'L2',
+    'L3',
+    'M1',
+    'M2',
   ];
 
   List<Map<String, dynamic>> _getCategories(ColorScheme colorScheme) => [
@@ -97,14 +99,14 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   // Sélectionner un fichier PDF
   Future<void> _pickPDF() async {
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
 
-      if (result.isNotEmpty) {
+      if (result != null && result.files.isNotEmpty) {
         setState(() {
-          _selectedFile = result.first;
+          _selectedFile = result.files.first;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -148,7 +150,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       // Détermination de la cible exacte
       String finalTarget = 'all';
       if (_selectedTarget == 'filiere') {
-        finalTarget = _selectedFiliere == 'Toutes'
+        finalTarget = _selectedFiliere == 'Tous'
             ? 'all'
             : 'filiere_${_selectedFiliere.toLowerCase()}';
       } else if (_selectedTarget == 'niveau') {
@@ -550,117 +552,147 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           ),
         ),
         const SizedBox(height: 16),
-        _buildTargetCard(
+        
+        // Option 1: Toute l'université (Radio)
+        _buildTargetRadioCard(
           context,
           'Toute l\'université',
           'Tous les étudiants et enseignants',
-          _selectedTarget == 'all',
-          () {
-            setState(() => _selectedTarget = 'all');
-          },
+          'all',
         ),
         const SizedBox(height: 12),
-        _buildTargetCard(
+        
+        // Option 2: Par filière (Radio + Dropdown stable)
+        _buildTargetRadioCard(
           context,
           'Par filière',
           'Sélectionnez une filière spécifique',
-          _selectedTarget == 'filiere',
-          () {
-            setState(() => _selectedTarget = 'filiere');
-          },
+          'filiere',
         ),
         if (_selectedTarget == 'filiere') ...[
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedFiliere,
-            dropdownColor: colorScheme.surface,
-            decoration: const InputDecoration(
-              labelText: 'Choisir la filière',
-              border: OutlineInputBorder(),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 12.0),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedFiliere,
+                  dropdownColor: colorScheme.surface,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    labelText: 'Filière cible',
+                  ),
+                  items: _filieres.map((filiere) {
+                    return DropdownMenuItem(value: filiere, child: Text(filiere));
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedFiliere = value;
+                      });
+                    }
+                  },
+                ),
+              ),
             ),
-            items: _filieres.map((filiere) {
-              return DropdownMenuItem(value: filiere, child: Text(filiere));
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _selectedFiliere = value;
-                });
-              }
-            },
           ),
         ],
         const SizedBox(height: 12),
-        _buildTargetCard(
+        
+        // Option 3: Par niveau (Radio + Dropdown stable)
+        _buildTargetRadioCard(
           context,
           'Par niveau',
           'Sélectionnez un niveau spécifique',
-          _selectedTarget == 'niveau',
-          () {
-            setState(() => _selectedTarget = 'niveau');
-          },
+          'niveau',
         ),
         if (_selectedTarget == 'niveau') ...[
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedNiveau,
-            dropdownColor: colorScheme.surface,
-            decoration: const InputDecoration(
-              labelText: 'Choisir le niveau',
-              border: OutlineInputBorder(),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 12.0),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButtonFormField<String>(
+                  value: _selectedNiveau,
+                  dropdownColor: colorScheme.surface,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    labelText: 'Niveau cible',
+                  ),
+                  items: _niveaux.map((niveau) {
+                    return DropdownMenuItem(value: niveau, child: Text(niveau));
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedNiveau = value;
+                      });
+                    }
+                  },
+                ),
+              ),
             ),
-            items: _niveaux.map((niveau) {
-              return DropdownMenuItem(value: niveau, child: Text(niveau));
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _selectedNiveau = value;
-                });
-              }
-            },
           ),
         ],
       ],
     );
   }
 
-  Widget _buildTargetCard(
+  Widget _buildTargetRadioCard(
     BuildContext context,
     String title,
     String subtitle,
-    bool isSelected,
-    VoidCallback onTap,
+    String targetValue,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isSelected = _selectedTarget == targetValue;
+    
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        setState(() {
+          _selectedTarget = targetValue;
+        });
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: isSelected
-              ? BorderDirectional(
-                  start: const BorderSide(color: AppColors.amber, width: 4),
-                  top: BorderSide(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
-                  ),
-                  bottom: BorderSide(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
-                  ),
-                  end: BorderSide(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
-                  ),
-                )
-              : Border.all(
-                  color: colorScheme.onSurface.withValues(alpha: 0.08),
-                ),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.amber
+                : colorScheme.onSurface.withValues(alpha: 0.08),
+            width: isSelected ? 2 : 1,
+          ),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            Radio<String>(
+              value: targetValue,
+              groupValue: _selectedTarget,
+              activeColor: AppColors.amber,
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedTarget = value;
+                  });
+                }
+              },
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -682,10 +714,6 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 ],
               ),
             ),
-            if (isSelected)
-              const Icon(Icons.check_circle, color: AppColors.amber)
-            else
-              Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),
