@@ -50,7 +50,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   void dispose() {
-    // On libère les abonnements pour éviter les fuites de mémoire, mola
+    // On libère les abonnements pour éviter les fuites de mémoire
     _adminSubscription?.cancel();
     _studentsSubscription?.cancel();
     _teachersSubscription?.cancel();
@@ -197,7 +197,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         final data = doc.data();
         final title = data['title'] ?? 'Nouveau communiqué';
         
-        // Parsing robuste de la date pour éviter le crash mola
+        // Parsing robuste de la date pour éviter le crash
         DateTime? createdDateTime;
         final rawCreatedAt = data['createdAt'];
         if (rawCreatedAt is Timestamp) {
@@ -227,7 +227,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           final name = data['name'] ?? 'Utilisateur';
           final rawRole = data['role'] ?? 'student';
           
-          // Correction de la bavure sur les rôles mola !
+          // Correction de la bavure sur les rôles 
           String roleLabel = 'Étudiant';
           if (rawRole == 'teacher') {
             roleLabel = 'Enseignant';

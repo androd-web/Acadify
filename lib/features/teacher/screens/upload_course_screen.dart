@@ -60,9 +60,9 @@ class _UploadCourseScreenState extends State<UploadCourseScreen> {
       allowedExtensions: ['pdf', 'docx', 'doc'],
     );
 
-    if (result != null && result.files.single.path != null) {
+    if (result.single.path != null) {
       setState(() {
-        _selectedFile = File(result.files.single.path!);
+        _selectedFile = File(result.single.path!);
       });
     }
   }

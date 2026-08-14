@@ -233,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(width: 16),
             Expanded(child: Text(title, style: AppTextStyles.bodyMedium)),
-            if (trailing != null) trailing,
+            ?trailing,
             if (showChevron) Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant, size: 20),
           ],
         ),

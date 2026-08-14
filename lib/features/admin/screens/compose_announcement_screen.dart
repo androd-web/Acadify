@@ -99,14 +99,14 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   // Sélectionner un fichier PDF
   Future<void> _pickPDF() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
 
-      if (result != null && result.files.isNotEmpty) {
+      if (result.isNotEmpty) {
         setState(() {
-          _selectedFile = result.files.first;
+          _selectedFile = result.first;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
