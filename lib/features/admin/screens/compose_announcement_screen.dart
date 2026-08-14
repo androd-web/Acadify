@@ -582,7 +582,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedFiliere,
+                  initialValue: _selectedFiliere,
                   dropdownColor: colorScheme.surface,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
@@ -625,7 +625,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButtonFormField<String>(
-                  value: _selectedNiveau,
+                  initialValue: _selectedNiveau,
                   dropdownColor: colorScheme.surface,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
@@ -682,8 +682,10 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           children: [
             Radio<String>(
               value: targetValue,
+              // ignore: deprecated_member_use
               groupValue: _selectedTarget,
               activeColor: AppColors.amber,
+              // ignore: deprecated_member_use
               onChanged: (value) {
                 if (value != null) {
                   setState(() {
