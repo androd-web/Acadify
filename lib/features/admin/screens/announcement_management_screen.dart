@@ -50,7 +50,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                   _buildFilters(context),
                   const SizedBox(height: 24),
                   _buildDynamicAnnouncementList(context),
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 240), // Plus d'espace pour éviter le masquage par la nav bar
                 ],
               ),
             ),
@@ -465,33 +465,35 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
     final screenWidth = mediaQuery.size.width;
     final screenHeight = mediaQuery.size.height;
 
-    // Position par défaut : en bas à droite (screenWidth - 160 pour laisser de la place au bouton)
+    // Position par défaut : en bas à droite
     final defaultX = screenWidth - 160.0;
     final defaultY = screenHeight - 160.0;
 
-    final x = _fabX ?? defaultX;
-    final y = _fabY ?? defaultY;
+    return StatefulBuilder(
+      builder: (context, setFabState) {
+        final x = _fabX ?? defaultX;
+        final y = _fabY ?? defaultY;
 
-    return Positioned(
-      left: x,
-      top: y,
-      child: GestureDetector(
-        onPanUpdate: (details) {
-          setState(() {
-            // On calcule la nouvelle position de manière fluide en ajoutant le delta de déplacement
-            final currentX = _fabX ?? defaultX;
-            final currentY = _fabY ?? defaultY;
-            _fabX = (currentX + details.delta.dx).clamp(10.0, screenWidth - 160.0);
-            _fabY = (currentY + details.delta.dy).clamp(80.0, screenHeight - 150.0);
-          });
-        },
-        child: FloatingActionButton.extended(
-          onPressed: () => context.push('/admin-compose-announcement'),
-          backgroundColor: AppColors.amber,
-          icon: const Icon(Icons.add, color: Colors.black),
-          label: const Text('NOUVEAU', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 1)),
-        ),
-      ),
+        return Positioned(
+          left: x,
+          top: y,
+          child: GestureDetector(
+            onPanUpdate: (details) {
+              setFabState(() {
+                // On calcule la nouvelle position de manière fluide sans refresh de la page entière
+                _fabX = (x + details.delta.dx).clamp(10.0, screenWidth - 160.0);
+                _fabY = (y + details.delta.dy).clamp(80.0, screenHeight - 150.0);
+              });
+            },
+            child: FloatingActionButton.extended(
+              onPressed: () => context.push('/admin-compose-announcement'),
+              backgroundColor: AppColors.amber,
+              icon: const Icon(Icons.add, color: Colors.black),
+              label: const Text('NOUVEAU', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -501,20 +503,22 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
       bottom: 0,
       left: 0,
       right: 0,
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildBottomNavItem(context, Icons.grid_view, 'Dashboard', false, () => context.go('/admin-dashboard')),
-            _buildBottomNavItem(context, Icons.group, 'Users', false, () => context.go('/admin-users')),
-            _buildBottomNavItem(context, Icons.notifications_active, 'Alerts', true, () {}),
-          ],
+      child: SafeArea(
+        top: false,
+        child: Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildBottomNavItem(context, Icons.grid_view, 'Dashboard', false, () => context.go('/admin-dashboard')),
+              _buildBottomNavItem(context, Icons.group, 'Users', false, () => context.go('/admin-users')),
+              _buildBottomNavItem(context, Icons.notifications_active, 'Alerts', true, () {}),
+            ],
+          ),
         ),
       ),
     );

@@ -15,7 +15,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   String _searchQuery = '';
   String _selectedFilter = 'Tous';
-  int _currentNavIndex = 2; // Index par défaut pour "Users"
+  int _currentNavIndex = 1; // Index par défaut pour "Users" (0: Dashboard, 1: Users, 2: Alerts)
 
   // Coordonnées pour le bouton d'ajout déplaçable
   double? _fabX;
@@ -28,16 +28,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  // Obtenir les initiales d'un nom
-  String _getInitials(String name) {
-    if (name.isEmpty) return 'U';
-    final parts = name.trim().split(' ');
-    if (parts.length > 1) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return parts[0][0].toUpperCase();
   }
 
   // Dialogue pour modifier un utilisateur en direct-direct
@@ -181,7 +171,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   _buildSearchAndFilters(context),
                   const SizedBox(height: 24),
                   _buildUserListStream(context),
-                  const SizedBox(height: 120),
+                  const SizedBox(height: 240), // Plus d'espace pour éviter le masquage par la nav bar
                 ],
               ),
             ),
@@ -471,7 +461,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
             return _buildUserCard(
               context,
-              _getInitials(name),
               name,
               matricule,
               displayRole,
@@ -488,7 +477,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Widget _buildUserCard(
     BuildContext context,
-    String initials,
     String name,
     String id,
     String role,
@@ -500,7 +488,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     Color roleColor;
     if (role == 'Étudiant') {
-      roleColor = AppColors.primary;
+      roleColor = AppColors.primary; // Vert
     } else if (role == 'Enseignant') {
       roleColor = AppColors.amber; // Orange comme demandé
     } else {
@@ -516,27 +504,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: roleColor.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-              border: Border.all(color: roleColor.withValues(alpha: 0.2)),
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: TextStyle(color: roleColor, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
+          // Le cercle de profil a été retiré ici pour un design plus épuré
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  name, 
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: roleColor, // Couleur du texte selon le rôle (Vert, Orange, Rouge)
+                  )
+                ),
                 Text(id, style: AppTextStyles.labelMedium.copyWith(color: AppColors.onSurfaceVariant)),
               ],
             ),
@@ -674,29 +653,37 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final defaultX = size.width - 160.0;
     final defaultY = size.height - 180.0;
 
-    return Positioned(
-      left: _fabX ?? defaultX,
-      top: _fabY ?? defaultY,
-      child: GestureDetector(
-        onPanUpdate: (details) {
-          setState(() {
-            _fabX = (_fabX ?? defaultX) + details.delta.dx;
-            _fabY = (_fabY ?? defaultY) + details.delta.dy;
-          });
-        },
-        child: ElevatedButton.icon(
-          onPressed: () => context.push('/admin-add-user'),
-          icon: const Icon(Icons.add, color: Colors.black),
-          label: const Text('Ajouter', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.amber,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            elevation: 10,
-            shadowColor: Colors.black.withValues(alpha: 0.4),
+    return StatefulBuilder(
+      builder: (context, setFabState) {
+        final x = _fabX ?? defaultX;
+        final y = _fabY ?? defaultY;
+
+        return Positioned(
+          left: x,
+          top: y,
+          child: GestureDetector(
+            onPanUpdate: (details) {
+              setFabState(() {
+                // Déplacement fluide sans refresh de la page entière
+                _fabX = (x + details.delta.dx).clamp(10.0, size.width - 160.0);
+                _fabY = (y + details.delta.dy).clamp(80.0, size.height - 150.0);
+              });
+            },
+            child: ElevatedButton.icon(
+              onPressed: () => context.push('/admin-add-user'),
+              icon: const Icon(Icons.add, color: Colors.black),
+              label: const Text('Ajouter', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.amber,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                elevation: 10,
+                shadowColor: Colors.black.withValues(alpha: 0.4),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -706,21 +693,22 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       bottom: 0,
       left: 0,
       right: 0,
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainer,
-          border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildBottomNavItem(0, Icons.dashboard, 'Dashboard'),
-            _buildBottomNavItem(1, Icons.notifications, 'Alertes'),
-            _buildBottomNavItem(2, Icons.group, 'Users'),
-            _buildBottomNavItem(3, Icons.analytics, 'Stats'),
-            _buildBottomNavItem(4, Icons.account_circle, 'Profil'),
-          ],
+      child: SafeArea(
+        top: false,
+        child: Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainer,
+            border: Border(top: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.05))),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildBottomNavItem(0, Icons.dashboard, 'Dashboard'),
+              _buildBottomNavItem(1, Icons.group, 'Users'),
+              _buildBottomNavItem(2, Icons.notifications, 'Alertes'),
+            ],
+          ),
         ),
       ),
     );
@@ -735,10 +723,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         });
         if (index == 0) {
           context.go('/admin-dashboard');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Navigation vers $label')),
-          );
+        } else if (index == 2) {
+          context.go('/admin-announcements');
         }
       },
       child: Container(
