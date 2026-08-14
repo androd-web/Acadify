@@ -112,69 +112,74 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       final slide = _slides[index];
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 40.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Illustration
-                            AspectRatio(
-                              aspectRatio: 0.8,
-                              child: Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerLow,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: colorScheme.primaryContainer.withValues(alpha: 0.1),
-                                      blurRadius: 40,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const SizedBox(height: 10),
+                              // Illustration
+                              AspectRatio(
+                                aspectRatio: 1.1,
+                                child: Container(
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerLow,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colorScheme.primaryContainer.withValues(alpha: 0.1),
+                                        blurRadius: 40,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Image.asset(
+                                      slide['image'],
+                                      fit: BoxFit.contain,
                                     ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: Image.asset(
-                                    slide['image'],
-                                    fit: BoxFit.contain,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 48),
-                            // Title
-                            if (slide['isGoldAccent'] == true)
-                              RichText(
-                                textAlign: TextAlign.center,
-                                text: TextSpan(
-                                  style: AppTextStyles.displayLarge.copyWith(fontSize: 17, color: colorScheme.onSurface),
-                                  children: [
-                                    TextSpan(text: slide['title']),
-                                    TextSpan(
-                                      text: slide['titleAccent'],
-                                      style: TextStyle(color: colorScheme.primary),
-                                    ),
-                                  ],
+                              const SizedBox(height: 32),
+                              // Title
+                              if (slide['isGoldAccent'] == true)
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: AppTextStyles.displayLarge.copyWith(fontSize: 18, color: colorScheme.onSurface, fontWeight: FontWeight.bold),
+                                    children: [
+                                      TextSpan(text: slide['title']),
+                                      TextSpan(
+                                        text: slide['titleAccent'],
+                                        style: TextStyle(color: colorScheme.primary),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Text(
+                                  slide['title'],
+                                  textAlign: TextAlign.center,
+                                  style: AppTextStyles.displayLarge.copyWith(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: slide['isGoldTitle'] == true ? colorScheme.primary : colorScheme.onSurface,
+                                  ),
                                 ),
-                              )
-                            else
+                              const SizedBox(height: 16),
+                              // Description
                               Text(
-                                slide['title'],
+                                slide['description'],
                                 textAlign: TextAlign.center,
-                                style: AppTextStyles.displayLarge.copyWith(
-                                  fontSize: 17,
-                                  color: slide['isGoldTitle'] == true ? colorScheme.primary : colorScheme.onSurface,
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                            const SizedBox(height: 24),
-                            // Description
-                            Text(
-                              slide['description'],
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.bodyLarge.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
+                              const SizedBox(height: 10),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -182,7 +187,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 // Footer
                 Padding(
-                  padding: const EdgeInsets.all(40.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 20.0),
                   child: Column(
                     children: [
                       // Progress
@@ -202,7 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 24),
                       // Button
                       SizedBox(
                         width: double.infinity,
@@ -255,4 +260,3 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 }
-
