@@ -23,9 +23,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   final TextEditingController _specialiteController = TextEditingController(); // Pour l'enseignant
   final TextEditingController _adminPosteController = TextEditingController(); // Pour l'admin
 
+  String _selectedFiliere = 'ISN'; // Par défaut parmi ['ISN', 'CDN', 'INS']
+  String _selectedNiveau = 'L1';   // Par défaut parmi ['L1', 'L2', 'L3', 'M1']
   String _selectedRole = 'Étudiant'; // 'Étudiant', 'Enseignant', 'Admin'
-  String _selectedFiliere = 'Génie Logiciel (GL)';
-  String _selectedNiveau = 'Licence 1';
 
   bool _forcePasswordChange = true;
   bool _accountActive = true;
@@ -488,16 +488,16 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               children: [
                 _buildDropdown(
                   context, 
-                  'Filière / Département', 
-                  ['Génie Logiciel (GL)', 'Réseaux & Télécoms (RT)', 'IA', 'Cyber-sécurité'],
+                  'FILIÈRE', 
+                  ['ISN', 'CDN', 'INS'],
                   _selectedFiliere,
                   (v) => setState(() => _selectedFiliere = v!),
                 ),
                 const SizedBox(height: 16),
                 _buildDropdown(
                   context, 
-                  'Niveau', 
-                  ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'],
+                  'PROMOTION', 
+                  ['L1', 'L2', 'L3', 'M1'],
                   _selectedNiveau,
                   (v) => setState(() => _selectedNiveau = v!),
                 ),
