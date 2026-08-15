@@ -42,6 +42,61 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     super.dispose();
   }
 
+  // Fonction pour afficher un SnackBar personnalisé et super stylé
+  void _showCustomSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError ? Colors.red[900] : colorScheme.surface,
+        duration: const Duration(seconds: 2),
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isError ? Colors.redAccent : AppColors.primaryAccent.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: isError ? Colors.redAccent : AppColors.primaryAccent,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: isError ? Colors.white : colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.close, 
+                color: isError ? Colors.white70 : colorScheme.onSurfaceVariant, 
+                size: 18,
+              ),
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Fonction pour générer un mot de passe aléatoire
   void _generateRandomPassword() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#%&*';
@@ -50,23 +105,17 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     setState(() {
       _passwordController.text = password;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Nouveau mot de passe généré !')),
-    );
+    _showCustomSnackBar('Nouveau mot de passe généré !');
   }
 
   Future<void> _saveUser() async {
     if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le nom et l\'email sont obligatoires !')),
-      );
+      _showCustomSnackBar('Le nom et l\'email sont obligatoires !', isError: true);
       return;
     }
 
     if (_selectedRole == 'Étudiant' && _matriculeController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le matricule est obligatoire pour un étudiant !')),
-      );
+      _showCustomSnackBar('Le matricule est obligatoire pour un étudiant !', isError: true);
       return;
     }
 
@@ -103,18 +152,13 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       // On crée un document avec un ID généré automatiquement
       await _firestore.collection('users').add(userData);
 
+      _showCustomSnackBar('Utilisateur enregistré avec succès !');
+      
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Utilisateur enregistré avec succès !')),
-        );
         context.pop();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de l\'enregistrement: $e')),
-        );
-      }
+      _showCustomSnackBar('Erreur lors de l\'enregistrement: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() {

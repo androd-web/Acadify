@@ -56,6 +56,61 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     super.dispose();
   }
 
+  // Fonction pour afficher un SnackBar personnalisé et super stylé
+  void _showCustomSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError ? Colors.red[900] : colorScheme.surface,
+        duration: const Duration(seconds: 2),
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isError ? Colors.redAccent : AppColors.primaryAccent.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: isError ? Colors.redAccent : AppColors.primaryAccent,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: isError ? Colors.white : colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.close, 
+                color: isError ? Colors.white70 : colorScheme.onSurfaceVariant, 
+                size: 18,
+              ),
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Fonction pour appliquer le formatage de texte
   void _applyFormat(String prefix, String suffix) {
     final text = _bodyController.text;
@@ -98,22 +153,10 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
         setState(() {
           _selectedFile = result.first;
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Fichier sélectionné : ${_selectedFile!.name}'),
-            ),
-          );
-        }
+        _showCustomSnackBar('Fichier sélectionné : ${_selectedFile!.name}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors de la sélection du fichier : $e'),
-          ),
-        );
-      }
+      _showCustomSnackBar('Erreur lors de la sélection du fichier : $e', isError: true);
     }
   }
 
@@ -146,11 +189,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   Future<void> _publishAnnouncement() async {
     if (_titleController.text.trim().isEmpty ||
         _bodyController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Le titre et le contenu sont requis !'),
-        ),
-      );
+      _showCustomSnackBar('Le titre et le contenu sont requis !', isError: true);
       return;
     }
 
@@ -245,18 +284,13 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
 
       await _firestore.collection('announcements').add(announcementData);
 
+      _showCustomSnackBar('Communiqué publié avec succès !');
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Communiqué publié avec succès !')),
-        );
         context.pop();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur lors de la publication: $e')),
-        );
-      }
+      _showCustomSnackBar('Erreur lors de la publication: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -556,13 +590,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                         Clipboard.setData(
                           ClipboardData(text: _bodyController.text),
                         );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Contenu copié dans le presse-papiers !',
-                            ),
-                          ),
-                        );
+                        _showCustomSnackBar('Contenu copié dans le presse-papiers !');
                       }
                     }),
                     SizedBox(

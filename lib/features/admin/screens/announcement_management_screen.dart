@@ -28,6 +28,61 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
     super.dispose();
   }
 
+  // Fonction pour afficher un SnackBar personnalisé et super stylé
+  void _showCustomSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError ? Colors.red[900] : colorScheme.surface,
+        duration: const Duration(seconds: 2),
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isError ? Colors.redAccent : AppColors.primaryAccent.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: isError ? Colors.redAccent : AppColors.primaryAccent,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: isError ? Colors.white : colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.close, 
+                color: isError ? Colors.white70 : colorScheme.onSurfaceVariant, 
+                size: 18,
+              ),
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -413,18 +468,10 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
                           await _firestore.collection('announcements').doc(docId).update({
                             'status': isArchived ? 'published' : 'archived',
                           });
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(isArchived ? 'Communiqué republié !' : 'Communiqué archivé !')),
-                            );
-                          }
+                          _showCustomSnackBar(isArchived ? 'Communiqué republié !' : 'Communiqué archivé !');
                         } else if (value == 'delete') {
                           await _firestore.collection('announcements').doc(docId).delete();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Communiqué supprimé avec succès !')),
-                            );
-                          }
+                          _showCustomSnackBar('Communiqué supprimé avec succès !');
                         }
                       },
                       itemBuilder: (context) => [
