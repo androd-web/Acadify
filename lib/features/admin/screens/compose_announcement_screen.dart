@@ -744,8 +744,7 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
                 Radio<bool>(
                   value: false,
                   groupValue: _targetAll,
-                  activeColor: AppColors.amber,
-                  // ignore: deprecated_member_use
+                  activeColor: AppColors.amber, 
                   onChanged: (value) {
                     if (value == false) {
                       setState(() {
