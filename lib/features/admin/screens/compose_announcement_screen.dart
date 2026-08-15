@@ -6,6 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
+// ignore_for_file: deprecated_member_use
+
 class AdminComposeAnnouncement extends StatefulWidget {
   const AdminComposeAnnouncement({super.key});
 
@@ -21,33 +23,21 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
   final TextEditingController _bodyController = TextEditingController();
 
   String _selectedCategory = 'Urgent';
-  String _selectedTarget = 'all'; // 'all', 'filiere', 'niveau'
 
-  // Variables pour les sélections dynamiques
-  String _selectedFiliere = 'Tous';
-  String _selectedNiveau = 'Tous';
+  // Variables pour ciblage flexible (peuvent être combinées)
+  bool _targetAll = true;
+  String? _selectedFiliere;
+  String? _selectedNiveau;
 
   // Fichier PDF sélectionné
   PlatformFile? _selectedFile;
   bool _isPublishing = false;
 
   // Récupération des filières exactes depuis l'inscription
-  final List<String> _filieres = [
-    'Tous',
-    'ISN',
-    'CDN',
-    'INS',
-  ];
+  final List<String> _filieres = ['Tous', 'ISN', 'CDN', 'INS'];
 
   // Récupération des niveaux exacts depuis l'inscription
-  final List<String> _niveaux = [
-    'Tous',
-    'L1',
-    'L2',
-    'L3',
-    'M1',
-    'M2',
-  ];
+  final List<String> _niveaux = ['Tous', 'L1', 'L2', 'L3', 'M1', 'M2'];
 
   List<Map<String, dynamic>> _getCategories(ColorScheme colorScheme) => [
     {'label': 'Urgent', 'icon': Icons.campaign, 'color': colorScheme.error},
@@ -127,16 +117,106 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
     }
   }
 
+  // Obtenir les critères de ciblage pour affichage
+  Map<String, dynamic> _getTargetingCriteria() {
+    if (_targetAll) {
+      return {'displayText': 'Tous les utilisateurs', 'filters': {}};
+    }
+
+    Map<String, dynamic> filters = {};
+    List<String> criteria = [];
+
+    if (_selectedFiliere != null && _selectedFiliere != 'Tous') {
+      filters['filiere'] = _selectedFiliere;
+      criteria.add('Filière: $_selectedFiliere');
+    }
+
+    if (_selectedNiveau != null && _selectedNiveau != 'Tous') {
+      filters['niveau'] = _selectedNiveau;
+      criteria.add('Niveau: $_selectedNiveau');
+    }
+
+    if (criteria.isEmpty) {
+      return {'displayText': 'Tous les utilisateurs', 'filters': {}};
+    }
+
+    return {'displayText': criteria.join(' + '), 'filters': filters};
+  }
+
   Future<void> _publishAnnouncement() async {
     if (_titleController.text.trim().isEmpty ||
         _bodyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Le titre et le contenu sont requis, mola !'),
+          content: Text('Le titre et le contenu sont requis !'),
         ),
       );
       return;
     }
+
+    // Afficher un dialogue de confirmation avec les critères
+    final targeting = _getTargetingCriteria();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmer la publication'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Titre:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(_titleController.text.trim()),
+            const SizedBox(height: 16),
+            const Text(
+              'Catégorie:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(_selectedCategory),
+            const SizedBox(height: 16),
+            const Text(
+              'Destinataires:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                targeting['displayText'],
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: Colors.orange,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Vous êtes sur le point de publier ce communiqué. Continuez?',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Publier'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
 
     setState(() {
       _isPublishing = true;
@@ -147,23 +227,15 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
       if (_selectedCategory == 'Urgent') categoryKey = 'urgent';
       if (_selectedCategory == 'Général') categoryKey = 'general';
 
-      // Détermination de la cible exacte
-      String finalTarget = 'all';
-      if (_selectedTarget == 'filiere') {
-        finalTarget = _selectedFiliere == 'Tous'
-            ? 'all'
-            : 'filiere_${_selectedFiliere.toLowerCase()}';
-      } else if (_selectedTarget == 'niveau') {
-        finalTarget = _selectedNiveau == 'Tous'
-            ? 'all'
-            : 'niveau_${_selectedNiveau.toLowerCase()}';
-      }
+      final targeting = _getTargetingCriteria();
 
       final announcementData = {
         'title': _titleController.text.trim(),
         'body': _bodyController.text.trim(),
         'category': categoryKey,
-        'targetGroup': finalTarget,
+        'targetFilters': targeting['filters'],
+        'targetDescription': targeting['displayText'],
+        'targetAll': _targetAll,
         'createdAt': FieldValue.serverTimestamp(),
         'authorUid': 'admin_uid',
         'authorName': 'Administrateur',
@@ -552,173 +624,246 @@ class _AdminComposeAnnouncementState extends State<AdminComposeAnnouncement> {
           ),
         ),
         const SizedBox(height: 16),
-        
-        // Option 1: Toute l'université (Radio)
-        _buildTargetRadioCard(
-          context,
-          'Toute l\'université',
-          'Tous les étudiants et enseignants',
-          'all',
-        ),
-        const SizedBox(height: 12),
-        
-        // Option 2: Par filière (Radio + Dropdown stable)
-        _buildTargetRadioCard(
-          context,
-          'Par filière',
-          'Sélectionnez une filière spécifique',
-          'filiere',
-        ),
-        if (_selectedTarget == 'filiere') ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 12.0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedFiliere,
-                  dropdownColor: colorScheme.surface,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    labelText: 'Filière cible',
-                  ),
-                  items: _filieres.map((filiere) {
-                    return DropdownMenuItem(value: filiere, child: Text(filiere));
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _selectedFiliere = value;
-                      });
-                    }
-                  },
-                ),
+
+        // Option 1: Toute l'université
+        InkWell(
+          onTap: () {
+            setState(() {
+              _targetAll = true;
+              _selectedFiliere = null;
+              _selectedNiveau = null;
+            });
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _targetAll
+                    ? AppColors.amber
+                    : colorScheme.onSurface.withValues(alpha: 0.08),
+                width: _targetAll ? 2 : 1,
               ),
             ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        
-        // Option 3: Par niveau (Radio + Dropdown stable)
-        _buildTargetRadioCard(
-          context,
-          'Par niveau',
-          'Sélectionnez un niveau spécifique',
-          'niveau',
-        ),
-        if (_selectedTarget == 'niveau') ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 12.0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedNiveau,
-                  dropdownColor: colorScheme.surface,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    labelText: 'Niveau cible',
-                  ),
-                  items: _niveaux.map((niveau) {
-                    return DropdownMenuItem(value: niveau, child: Text(niveau));
-                  }).toList(),
+            child: Row(
+              children: [
+                Radio<bool>(
+                  value: true,
+                  groupValue: _targetAll,
+                  activeColor: AppColors.amber,
                   onChanged: (value) {
-                    if (value != null) {
+                    if (value == true) {
                       setState(() {
-                        _selectedNiveau = value;
+                        _targetAll = true;
+                        _selectedFiliere = null;
+                        _selectedNiveau = null;
                       });
                     }
                   },
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Toute l\'université',
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Tous les étudiants et enseignants',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Option 2: Ciblage personnalisé
+        InkWell(
+          onTap: () {
+            setState(() {
+              _targetAll = false;
+            });
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: !_targetAll
+                    ? AppColors.amber
+                    : colorScheme.onSurface.withValues(alpha: 0.08),
+                width: !_targetAll ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Radio<bool>(
+                  value: false,
+                  groupValue: _targetAll,
+                  activeColor: AppColors.amber,
+                  // ignore: deprecated_member_use
+                  onChanged: (value) {
+                    if (value == false) {
+                      setState(() {
+                        _targetAll = false;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ciblage personnalisé',
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Sélectionnez filière et/ou niveau',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (!_targetAll) ...[
+          const SizedBox(height: 24),
+          Text(
+            'Par filière',
+            style: AppTextStyles.bodyLarge.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sélectionnez une filière (optionnel)',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            initialValue: _selectedFiliere,
+            dropdownColor: colorScheme.surface,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              hintText: 'Aucune filière sélectionnée',
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Aucune filière'),
+              ),
+              ..._filieres.where((f) => f != 'Tous').map((filiere) {
+                return DropdownMenuItem<String?>(
+                  value: filiere,
+                  child: Text(filiere),
+                );
+              }),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedFiliere = value;
+              });
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Par niveau',
+            style: AppTextStyles.bodyLarge.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sélectionnez un niveau (optionnel)',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            initialValue: _selectedNiveau,
+            dropdownColor: colorScheme.surface,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              hintText: 'Aucun niveau sélectionné',
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Aucun niveau'),
+              ),
+              ..._niveaux.where((n) => n != 'Tous').map((niveau) {
+                return DropdownMenuItem<String?>(
+                  value: niveau,
+                  child: Text(niveau),
+                );
+              }),
+            ],
+            onChanged: (value) {
+              setState(() {
+                _selectedNiveau = value;
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              'Destinataires: ${_getTargetingCriteria()['displayText']}',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
         ],
       ],
-    );
-  }
-
-  Widget _buildTargetRadioCard(
-    BuildContext context,
-    String title,
-    String subtitle,
-    String targetValue,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isSelected = _selectedTarget == targetValue;
-    
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedTarget = targetValue;
-        });
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.amber
-                : colorScheme.onSurface.withValues(alpha: 0.08),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Radio<String>(
-              value: targetValue,
-              // ignore: deprecated_member_use
-              groupValue: _selectedTarget,
-              activeColor: AppColors.amber,
-              // ignore: deprecated_member_use
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    _selectedTarget = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.6,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

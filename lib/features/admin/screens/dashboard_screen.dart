@@ -355,7 +355,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           child: Row(
             children: [
-              // Retrait du menu burger inutile mola
+              // Retrait du menu burger inutile 
               Text(
                 'Acadify UIECC',
                 style: AppTextStyles.headlineMedium.copyWith(

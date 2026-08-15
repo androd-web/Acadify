@@ -209,7 +209,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 40),
               child: Text(
-                'Aucun communiqué trouvé, mola.',
+                'Aucun communiqué trouvé.',
                 style: AppTextStyles.bodyMedium.copyWith(color: AppColors.onSurfaceVariant),
               ),
             ),
@@ -270,7 +270,7 @@ class _AdminAnnouncementManagementState extends State<AdminAnnouncementManagemen
             final targetGroup = data['targetGroup'] ?? 'all';
             final status = data['status'] ?? 'published';
 
-            // Parsing robuste de la date pour éviter le crash mola
+            // Parsing robuste de la date pour éviter le crash 
             DateTime? createdDateTime;
             final rawCreatedAt = data['createdAt'];
             if (rawCreatedAt is Timestamp) {

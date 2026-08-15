@@ -497,7 +497,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                 _buildDropdown(
                   context, 
                   'PROMOTION', 
-                  ['L1', 'L2', 'L3', 'M1'],
+                  ['L1', 'L2', 'L3', 'M1','M2'],
                   _selectedNiveau,
                   (v) => setState(() => _selectedNiveau = v!),
                 ),

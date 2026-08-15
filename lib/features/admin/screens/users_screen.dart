@@ -120,7 +120,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   onPressed: () async {
                     if (nameController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Le nom ne peut pas être vide, mola !')),
+                        const SnackBar(content: Text('Le nom ne peut pas être vide !')),
                       );
                       return;
                     }
