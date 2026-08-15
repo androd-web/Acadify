@@ -20,7 +20,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController(text: 'AC#78x2P');
-  final TextEditingController _teacherPostController = TextEditingController(); // Pour le poste de l'enseignant
+  final TextEditingController _specialiteController = TextEditingController(); // Aligné sur RegisterTeacherScreen
 
   String _selectedRole = 'Étudiant'; // 'Étudiant', 'Enseignant', 'Admin'
   String _selectedFiliere = 'Génie Logiciel (GL)';
@@ -37,7 +37,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _teacherPostController.dispose();
+    _specialiteController.dispose();
     super.dispose();
   }
 
@@ -88,14 +88,14 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      // Ajout des champs spécifiques selon le rôle
+      // Ajout des champs spécifiques selon le rôle (aligné sur les inscriptions)
       if (roleKey == 'student') {
         userData['matricule'] = _matriculeController.text.trim().toUpperCase();
         userData['filiere'] = _selectedFiliere;
         userData['niveau'] = _selectedNiveau;
         userData['groupe'] = _selectedGroupe;
       } else if (roleKey == 'teacher') {
-        userData['poste'] = _teacherPostController.text.trim();
+        userData['specialite'] = _specialiteController.text.trim(); // Aligné sur RegisterTeacherScreen
       }
 
       // On crée un document avec un ID généré automatiquement
@@ -523,9 +523,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               children: [
                 _buildTextField(
                   context, 
-                  'Matière enseignée / Poste', 
-                  'Ex: Algorithmique, Chef de Département...', 
-                  _teacherPostController,
+                  'Spécialité', 
+                  'Ex: Algorithmique, Base de données...', 
+                  _specialiteController, // Aligné sur RegisterTeacherScreen
                 ),
               ],
             ),
