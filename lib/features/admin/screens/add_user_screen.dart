@@ -20,12 +20,12 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController(text: 'AC#78x2P');
-  final TextEditingController _specialiteController = TextEditingController(); // Aligné sur RegisterTeacherScreen
+  final TextEditingController _specialiteController = TextEditingController(); // Pour l'enseignant
+  final TextEditingController _adminPosteController = TextEditingController(); // Pour l'admin
 
   String _selectedRole = 'Étudiant'; // 'Étudiant', 'Enseignant', 'Admin'
   String _selectedFiliere = 'Génie Logiciel (GL)';
   String _selectedNiveau = 'Licence 1';
-  String _selectedGroupe = 'Groupe A';
 
   bool _forcePasswordChange = true;
   bool _accountActive = true;
@@ -38,6 +38,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _specialiteController.dispose();
+    _adminPosteController.dispose();
     super.dispose();
   }
 
@@ -88,14 +89,15 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      // Ajout des champs spécifiques selon le rôle (aligné sur les inscriptions)
+      // Ajout des champs spécifiques selon le rôle
       if (roleKey == 'student') {
         userData['matricule'] = _matriculeController.text.trim().toUpperCase();
         userData['filiere'] = _selectedFiliere;
         userData['niveau'] = _selectedNiveau;
-        userData['groupe'] = _selectedGroupe;
       } else if (roleKey == 'teacher') {
-        userData['specialite'] = _specialiteController.text.trim(); // Aligné sur RegisterTeacherScreen
+        userData['specialite'] = _specialiteController.text.trim();
+      } else if (roleKey == 'admin') {
+        userData['poste'] = _adminPosteController.text.trim();
       }
 
       // On crée un document avec un ID généré automatiquement
@@ -151,12 +153,10 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                       const SizedBox(height: 12),
                       _buildPersonalInfoForm(context),
                       const SizedBox(height: 24),
-                      if (_selectedRole != 'Admin') ...[
-                        _buildSectionHeader(context, Icons.school, 'Spécialité & Permissions'),
-                        const SizedBox(height: 12),
-                        _buildDynamicFields(context),
-                        const SizedBox(height: 24),
-                      ],
+                      _buildSectionHeader(context, Icons.school, 'Spécialité & Permissions'),
+                      const SizedBox(height: 12),
+                      _buildDynamicFields(context),
+                      const SizedBox(height: 24),
                       _buildSectionHeader(context, Icons.security, 'Sécurité'),
                       const SizedBox(height: 12),
                       _buildSecuritySection(context),
@@ -494,41 +494,36 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                   (v) => setState(() => _selectedFiliere = v!),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDropdown(
-                        context, 
-                        'Niveau', 
-                        ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'],
-                        _selectedNiveau,
-                        (v) => setState(() => _selectedNiveau = v!),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildDropdown(
-                        context, 
-                        'Groupe', 
-                        ['Groupe A', 'Groupe B', 'Groupe C'],
-                        _selectedGroupe,
-                        (v) => setState(() => _selectedGroupe = v!),
-                      ),
-                    ),
-                  ],
+                _buildDropdown(
+                  context, 
+                  'Niveau', 
+                  ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'],
+                  _selectedNiveau,
+                  (v) => setState(() => _selectedNiveau = v!),
                 ),
               ],
             )
-          : Column(
-              children: [
-                _buildTextField(
-                  context, 
-                  'Spécialité', 
-                  'Ex: Algorithmique, Base de données...', 
-                  _specialiteController, // Aligné sur RegisterTeacherScreen
+          : _selectedRole == 'Enseignant'
+              ? Column(
+                  children: [
+                    _buildTextField(
+                      context, 
+                      'Spécialité', 
+                      'Ex: Algorithmique, Base de données...', 
+                      _specialiteController,
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _buildTextField(
+                      context, 
+                      'Poste / Fonction administrative', 
+                      'Ex: Scolarité, Directeur des Études...', 
+                      _adminPosteController,
+                    ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 
@@ -609,7 +604,12 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Forcer le changement au 1er login', style: AppTextStyles.bodyMedium),
+              Expanded(
+                child: Text(
+                  'Forcer le changement au 1er login', 
+                  style: AppTextStyles.bodyMedium,
+                ),
+              ),
               Switch(
                 value: _forcePasswordChange,
                 onChanged: (v) => setState(() => _forcePasswordChange = v),
