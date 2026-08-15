@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 
@@ -18,17 +19,16 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   final TextEditingController _matriculeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _birthDateController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController(text: 'AC#78x2P');
+  final TextEditingController _teacherPostController = TextEditingController(); // Pour le poste de l'enseignant
 
-  String _selectedRole = 'Étudiant';
+  String _selectedRole = 'Étudiant'; // 'Étudiant', 'Enseignant', 'Admin'
   String _selectedFiliere = 'Génie Logiciel (GL)';
   String _selectedNiveau = 'Licence 1';
   String _selectedGroupe = 'Groupe A';
 
   bool _forcePasswordChange = true;
   bool _accountActive = true;
-  bool _sendInvitation = false;
   bool _isSaving = false;
 
   @override
@@ -36,15 +36,35 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     _matriculeController.dispose();
     _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
-    _birthDateController.dispose();
+    _passwordController.dispose();
+    _teacherPostController.dispose();
     super.dispose();
+  }
+
+  // Fonction pour générer un mot de passe aléatoire
+  void _generateRandomPassword() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#%&*';
+    final rand = Random();
+    final password = List.generate(10, (index) => chars[rand.nextInt(chars.length)]).join();
+    setState(() {
+      _passwordController.text = password;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Nouveau mot de passe généré !')),
+    );
   }
 
   Future<void> _saveUser() async {
     if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Le nom et l\'email sont obligatoires !')),
+      );
+      return;
+    }
+
+    if (_selectedRole == 'Étudiant' && _matriculeController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Le matricule est obligatoire pour un étudiant !')),
       );
       return;
     }
@@ -61,17 +81,22 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       final userData = {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
-        'matricule': _matriculeController.text.trim().toUpperCase(),
-        'phone': _phoneController.text.trim(),
-        'birthDate': _birthDateController.text.trim(),
         'role': roleKey,
-        'filiere': _selectedFiliere,
-        'niveau': _selectedNiveau,
-        'groupe': _selectedGroupe,
+        'password': _passwordController.text.trim(),
         'forcePasswordChange': _forcePasswordChange,
         'status': _accountActive ? 'active' : 'inactive',
         'createdAt': FieldValue.serverTimestamp(),
       };
+
+      // Ajout des champs spécifiques selon le rôle
+      if (roleKey == 'student') {
+        userData['matricule'] = _matriculeController.text.trim().toUpperCase();
+        userData['filiere'] = _selectedFiliere;
+        userData['niveau'] = _selectedNiveau;
+        userData['groupe'] = _selectedGroupe;
+      } else if (roleKey == 'teacher') {
+        userData['poste'] = _teacherPostController.text.trim();
+      }
 
       // On crée un document avec un ID généré automatiquement
       await _firestore.collection('users').add(userData);
@@ -107,7 +132,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         children: [
           _buildAppBar(context),
           Positioned.fill(
-            top: 80,
+            top: 90,
             child: _isSaving 
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
@@ -117,23 +142,27 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                     children: [
                       const SizedBox(height: 12),
                       _buildProfilePreview(context),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(context, Icons.badge, 'Sélection du Rôle'),
+                      const SizedBox(height: 12),
+                      _buildRoleSelection(context),
+                      const SizedBox(height: 24),
                       _buildSectionHeader(context, Icons.person, 'Informations Personnelles'),
                       const SizedBox(height: 12),
                       _buildPersonalInfoForm(context),
-                      const SizedBox(height: 32),
-                      _buildSectionHeader(context, Icons.badge, 'Rôle Et Permissions'),
-                      const SizedBox(height: 12),
-                      _buildRoleSelection(context),
-                      const SizedBox(height: 32),
-                      _buildDynamicFields(context),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+                      if (_selectedRole != 'Admin') ...[
+                        _buildSectionHeader(context, Icons.school, 'Spécialité & Permissions'),
+                        const SizedBox(height: 12),
+                        _buildDynamicFields(context),
+                        const SizedBox(height: 24),
+                      ],
                       _buildSectionHeader(context, Icons.security, 'Sécurité'),
                       const SizedBox(height: 12),
                       _buildSecuritySection(context),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       _buildStatusSection(context),
-                      const SizedBox(height: 48),
+                      const SizedBox(height: 40),
                       _buildActionButtons(context),
                       const SizedBox(height: 40),
                     ],
@@ -153,36 +182,40 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       right: 0,
       child: SafeArea(
         child: Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 70,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
               IconButton(
                 icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
                 onPressed: () => context.pop(),
               ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Ajouter un utilisateur',
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      color: colorScheme.onSurface,
-                      fontWeight: FontWeight.bold,
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Ajouter un utilisateur',
+                      style: AppTextStyles.headlineMedium.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    'Créez un nouveau compte académique',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 10,
+                    Text(
+                      'Créez un nouveau compte académique',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const Spacer(),
               IconButton(
                 icon: const Icon(Icons.save, color: AppColors.amber),
                 onPressed: _saveUser,
@@ -197,7 +230,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   Widget _buildProfilePreview(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       width: double.infinity,
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -209,8 +242,8 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           Stack(
             children: [
               Container(
-                width: 96,
-                height: 96,
+                width: 80,
+                height: 80,
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerLow,
@@ -218,7 +251,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                   border: Border.all(color: colorScheme.primaryContainer, width: 2),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(48),
+                  borderRadius: BorderRadius.circular(40),
                   child: Image.network(
                     'https://lh3.googleusercontent.com/aida-public/AB6AXuCCOxKKLpHAVjSrjqm4h5iRLVRGOg7RoN-QBy004hXaEIEezVv3BkOUDiLm-XGj0-7ONMbv3OjnDV4yaxcS_cjOH_6GlYnEhkydfRNGzqWeenKHVwPixU3ZcQVtgkeWJWeH2lq0wChXwC7qU7y4sDmCFaHNWuzwjnaNbMUG3UtrllRgw4I1_8bDvrFKsJe5Tpr5FRKrczFbGBnzoNlrC1yNEvihL72HAMqtF3L71lGMlQGeImik6UWai3-IkNMkzUZ1y6E6Ue-dZNId',
                     fit: BoxFit.cover,
@@ -229,19 +262,23 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                 bottom: 0,
                 right: 0,
                 child: Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
                     shape: BoxShape.circle,
-                    border: Border.all(color: colorScheme.surface, width: 3),
+                    border: Border.all(color: colorScheme.surface, width: 2),
                   ),
-                  child: const Icon(Icons.photo_camera, size: 16, color: Colors.white),
+                  child: const Icon(Icons.photo_camera, size: 14, color: Colors.white),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text('Nouvel Utilisateur', style: AppTextStyles.headlineMedium),
+          const SizedBox(height: 12),
+          Text(
+            _nameController.text.isEmpty ? 'Nouvel Utilisateur' : _nameController.text,
+            style: AppTextStyles.headlineMedium.copyWith(fontSize: 18),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -258,11 +295,13 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Matricule: ———',
-            style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant),
-          ),
+          if (_selectedRole == 'Étudiant') ...[
+            const SizedBox(height: 8),
+            Text(
+              _matriculeController.text.isEmpty ? 'Matricule: ———' : 'Matricule: ${_matriculeController.text.toUpperCase()}',
+              style: AppTextStyles.bodySmall.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          ],
         ],
       ),
     );
@@ -296,25 +335,44 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       ),
       child: Column(
         children: [
-          _buildTextField(context, 'Matricule', 'Ex: 23U045', _matriculeController),
+          if (_selectedRole == 'Étudiant') ...[
+            _buildTextField(
+              context, 
+              'Matricule', 
+              'Ex: 23U045', 
+              _matriculeController,
+              onChanged: (val) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+          ],
+          _buildTextField(
+            context, 
+            'Nom complet', 
+            'Prénom et Nom', 
+            _nameController,
+            onChanged: (val) => setState(() {}),
+          ),
           const SizedBox(height: 16),
-          _buildTextField(context, 'Nom complet', 'Prénom et Nom', _nameController),
-          const SizedBox(height: 16),
-          _buildTextField(context, 'Email Académique', 'nom@acadify.edu', _emailController, keyboardType: TextInputType.emailAddress),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _buildTextField(context, 'Téléphone', '+237 ...', _phoneController, keyboardType: TextInputType.phone)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildTextField(context, 'Date de naissance', 'JJ/MM/AAAA', _birthDateController)),
-            ],
+          _buildTextField(
+            context, 
+            'Email Académique', 
+            'nom@acadify.edu', 
+            _emailController, 
+            keyboardType: TextInputType.emailAddress,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTextField(BuildContext context, String label, String hint, TextEditingController controller, {TextInputType? keyboardType}) {
+  Widget _buildTextField(
+    BuildContext context, 
+    String label, 
+    String hint, 
+    TextEditingController controller, {
+    TextInputType? keyboardType,
+    ValueChanged<String>? onChanged,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Column(
@@ -328,6 +386,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          onChanged: onChanged,
           style: AppTextStyles.bodyMedium,
           decoration: InputDecoration(
             hintText: hint,
@@ -364,8 +423,8 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
     return GestureDetector(
       onTap: () => setState(() => _selectedRole = role),
       child: Container(
-        width: 120,
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        width: 110,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? colorScheme.primaryContainer.withValues(alpha: 0.1) : colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
@@ -377,20 +436,21 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           children: [
             Icon(
               icon,
-              size: 32,
+              size: 28,
               color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               role,
               style: AppTextStyles.labelMedium.copyWith(
                 color: isSelected ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
+                fontSize: 12,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Container(
-              width: 16,
-              height: 16,
+              width: 14,
+              height: 14,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
@@ -401,8 +461,8 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               child: isSelected 
                 ? Center(
                     child: Container(
-                      width: 8,
-                      height: 8,
+                      width: 6,
+                      height: 6,
                       decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
                     ),
                   )
@@ -423,41 +483,52 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
       ),
-      child: Column(
-        children: [
-          _buildDropdown(
-            context, 
-            'Filière / Département', 
-            ['Génie Logiciel (GL)', 'Réseaux & Télécoms (RT)', 'IA', 'Cyber-sécurité'],
-            _selectedFiliere,
-            (v) => setState(() => _selectedFiliere = v!),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdown(
+      child: _selectedRole == 'Étudiant'
+          ? Column(
+              children: [
+                _buildDropdown(
                   context, 
-                  'Niveau', 
-                  ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'],
-                  _selectedNiveau,
-                  (v) => setState(() => _selectedNiveau = v!),
+                  'Filière / Département', 
+                  ['Génie Logiciel (GL)', 'Réseaux & Télécoms (RT)', 'IA', 'Cyber-sécurité'],
+                  _selectedFiliere,
+                  (v) => setState(() => _selectedFiliere = v!),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDropdown(
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDropdown(
+                        context, 
+                        'Niveau', 
+                        ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1'],
+                        _selectedNiveau,
+                        (v) => setState(() => _selectedNiveau = v!),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildDropdown(
+                        context, 
+                        'Groupe', 
+                        ['Groupe A', 'Groupe B', 'Groupe C'],
+                        _selectedGroupe,
+                        (v) => setState(() => _selectedGroupe = v!),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                _buildTextField(
                   context, 
-                  'Groupe', 
-                  ['Groupe A', 'Groupe B', 'Groupe C'],
-                  _selectedGroupe,
-                  (v) => setState(() => _selectedGroupe = v!),
+                  'Matière enseignée / Poste', 
+                  'Ex: Algorithmique, Chef de Département...', 
+                  _teacherPostController,
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
+              ],
+            ),
     );
   }
 
@@ -508,41 +579,31 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.05)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Mot de passe temporaire', style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant)),
-                    const SizedBox(height: 4),
-                    Text(
-                      'AC#78x2P',
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: AppColors.amber,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Mot de passe temporaire', 
+                style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant, fontSize: 10),
+              ),
+              TextButton.icon(
+                onPressed: _generateRandomPassword,
+                icon: const Icon(Icons.autorenew, size: 16, color: AppColors.amber),
+                label: Text(
+                  'Générer',
+                  style: AppTextStyles.labelMedium.copyWith(color: AppColors.amber),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.content_copy, color: AppColors.amber),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Mot de passe copié !')),
-                    );
-                  },
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _buildTextField(
+            context, 
+            'Saisir ou modifier le mot de passe', 
+            'Mot de passe', 
+            _passwordController,
           ),
           const SizedBox(height: 16),
           Row(
@@ -571,12 +632,13 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
       ),
-      child: Column(
-        children: [
-          _buildToggleOption(context, Icons.check_circle, 'Compte actif', _accountActive, (v) => setState(() => _accountActive = v), colorScheme.primary),
-          Divider(color: colorScheme.onSurface.withValues(alpha: 0.1), height: 24),
-          _buildToggleOption(context, Icons.mail, 'Envoyer une invitation', _sendInvitation, (v) => setState(() => _sendInvitation = v), AppColors.amber),
-        ],
+      child: _buildToggleOption(
+        context, 
+        Icons.check_circle, 
+        'Compte actif', 
+        _accountActive, 
+        (v) => setState(() => _accountActive = v), 
+        colorScheme.primary,
       ),
     );
   }
