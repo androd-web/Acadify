@@ -44,7 +44,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   Future<void> _saveUser() async {
     if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le nom et l\'email sont obligatoires, mola !')),
+        const SnackBar(content: Text('Le nom et l\'email sont obligatoires !')),
       );
       return;
     }
