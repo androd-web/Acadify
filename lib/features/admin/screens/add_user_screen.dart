@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'dart:math';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -13,7 +13,6 @@ class AdminAddUserScreen extends StatefulWidget {
 }
 
 class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Contrôleurs de saisie
   final TextEditingController _matriculeController = TextEditingController();
@@ -45,9 +44,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   // Fonction pour afficher un SnackBar personnalisé et super stylé
   void _showCustomSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-    
+
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -83,8 +82,8 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
             ),
             IconButton(
               icon: Icon(
-                Icons.close, 
-                color: isError ? Colors.white70 : colorScheme.onSurfaceVariant, 
+                Icons.close,
+                color: isError ? Colors.white70 : colorScheme.onSurfaceVariant,
                 size: 18,
               ),
               onPressed: () {
@@ -119,6 +118,11 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       return;
     }
 
+    if (_passwordController.text.trim().length < 6) {
+      _showCustomSnackBar('Le mot de passe doit contenir au moins 6 caractères !', isError: true);
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -128,35 +132,30 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
       if (_selectedRole == 'Enseignant') roleKey = 'teacher';
       if (_selectedRole == 'Admin') roleKey = 'admin';
 
-      final userData = {
-        'name': _nameController.text.trim(),
+      // Appel de la Cloud Function "createUser"
+      // Cette fonction crée le compte Firebase Auth ET le document Firestore
+      // sans déconnecter la session admin en cours.
+      final callable = FirebaseFunctions.instance.httpsCallable('createUser');
+
+      await callable.call({
         'email': _emailController.text.trim(),
-        'role': roleKey,
         'password': _passwordController.text.trim(),
-        'forcePasswordChange': _forcePasswordChange,
-        'status': _accountActive ? 'active' : 'inactive',
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-
-      // Ajout des champs spécifiques selon le rôle
-      if (roleKey == 'student') {
-        userData['matricule'] = _matriculeController.text.trim().toUpperCase();
-        userData['filiere'] = _selectedFiliere;
-        userData['niveau'] = _selectedNiveau;
-      } else if (roleKey == 'teacher') {
-        userData['specialite'] = _specialiteController.text.trim();
-      } else if (roleKey == 'admin') {
-        userData['poste'] = _adminPosteController.text.trim();
-      }
-
-      // On crée un document avec un ID généré automatiquement
-      await _firestore.collection('users').add(userData);
+        'name': _nameController.text.trim(),
+        'role': roleKey,
+        'matricule': _matriculeController.text.trim().toUpperCase(),
+        'filiere': _selectedFiliere,
+        'niveau': _selectedNiveau,
+        'specialite': _specialiteController.text.trim(),
+        'poste': _adminPosteController.text.trim(),
+      });
 
       _showCustomSnackBar('Utilisateur enregistré avec succès !');
-      
+
       if (mounted) {
         context.pop();
       }
+    } on FirebaseFunctionsException catch (e) {
+      _showCustomSnackBar('Erreur : ${e.message}', isError: true);
     } catch (e) {
       _showCustomSnackBar('Erreur lors de l\'enregistrement: $e', isError: true);
     } finally {
@@ -171,7 +170,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
@@ -179,7 +178,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           _buildAppBar(context),
           Positioned.fill(
             top: 90,
-            child: _isSaving 
+            child: _isSaving
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -381,27 +380,27 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         children: [
           if (_selectedRole == 'Étudiant') ...[
             _buildTextField(
-              context, 
-              'Matricule', 
-              'Ex: 23U045', 
+              context,
+              'Matricule',
+              'Ex: 23U045',
               _matriculeController,
               onChanged: (val) => setState(() {}),
             ),
             const SizedBox(height: 16),
           ],
           _buildTextField(
-            context, 
-            'Nom complet', 
-            'Prénom et Nom', 
+            context,
+            'Nom complet',
+            'Prénom et Nom',
             _nameController,
             onChanged: (val) => setState(() {}),
           ),
           const SizedBox(height: 16),
           _buildTextField(
-            context, 
-            'Email Académique', 
-            'nom@acadify.edu', 
-            _emailController, 
+            context,
+            'Email Académique',
+            'nom@acadify.edu',
+            _emailController,
             keyboardType: TextInputType.emailAddress,
           ),
         ],
@@ -410,9 +409,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
   }
 
   Widget _buildTextField(
-    BuildContext context, 
-    String label, 
-    String hint, 
+    BuildContext context,
+    String label,
+    String hint,
     TextEditingController controller, {
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged,
@@ -502,7 +501,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
                   width: 2,
                 ),
               ),
-              child: isSelected 
+              child: isSelected
                 ? Center(
                     child: Container(
                       width: 6,
@@ -531,16 +530,16 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           ? Column(
               children: [
                 _buildDropdown(
-                  context, 
-                  'FILIÈRE', 
+                  context,
+                  'FILIÈRE',
                   ['ISN', 'CDN', 'INS'],
                   _selectedFiliere,
                   (v) => setState(() => _selectedFiliere = v!),
                 ),
                 const SizedBox(height: 16),
                 _buildDropdown(
-                  context, 
-                  'PROMOTION', 
+                  context,
+                  'PROMOTION',
                   ['L1', 'L2', 'L3', 'M1','M2'],
                   _selectedNiveau,
                   (v) => setState(() => _selectedNiveau = v!),
@@ -551,9 +550,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               ? Column(
                   children: [
                     _buildTextField(
-                      context, 
-                      'Spécialité', 
-                      'Ex: Algorithmique, Base de données...', 
+                      context,
+                      'Spécialité',
+                      'Ex: Algorithmique, Base de données...',
                       _specialiteController,
                     ),
                   ],
@@ -561,9 +560,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
               : Column(
                   children: [
                     _buildTextField(
-                      context, 
-                      'Poste / Fonction administrative', 
-                      'Ex: Scolarité, Directeur des Études...', 
+                      context,
+                      'Poste / Fonction administrative',
+                      'Ex: Scolarité, Directeur des Études...',
                       _adminPosteController,
                     ),
                   ],
@@ -624,7 +623,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Mot de passe temporaire', 
+                'Mot de passe temporaire',
                 style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant, fontSize: 10),
               ),
               TextButton.icon(
@@ -639,9 +638,9 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
           ),
           const SizedBox(height: 4),
           _buildTextField(
-            context, 
-            'Saisir ou modifier le mot de passe', 
-            'Mot de passe', 
+            context,
+            'Saisir ou modifier le mot de passe',
+            'Mot de passe',
             _passwordController,
           ),
           const SizedBox(height: 16),
@@ -650,7 +649,7 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Forcer le changement au 1er login', 
+                  'Forcer le changement au 1er login',
                   style: AppTextStyles.bodyMedium,
                 ),
               ),
@@ -677,11 +676,11 @@ class _AdminAddUserScreenState extends State<AdminAddUserScreen> {
         border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
       ),
       child: _buildToggleOption(
-        context, 
-        Icons.check_circle, 
-        'Compte actif', 
-        _accountActive, 
-        (v) => setState(() => _accountActive = v), 
+        context,
+        Icons.check_circle,
+        'Compte actif',
+        _accountActive,
+        (v) => setState(() => _accountActive = v),
         colorScheme.primary,
       ),
     );
