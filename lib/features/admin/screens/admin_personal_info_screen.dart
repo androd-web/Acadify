@@ -27,7 +27,7 @@ class _AdminPersonalInfoScreenState extends State<AdminPersonalInfoScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.adminData['name']);
+    _nameController = TextEditingController(text: widget.adminData['name'] ?? '');
     _posteController = TextEditingController(text: widget.adminData['poste'] ?? 'Administrateur');
   }
 
