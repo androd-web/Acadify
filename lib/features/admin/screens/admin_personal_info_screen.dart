@@ -102,7 +102,7 @@ class _AdminPersonalInfoScreenState extends State<AdminPersonalInfoScreen> {
               Text(
                 'DÉTAILS DU COMPTE ADMIN',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  color: colorScheme.onSurfaceVariant.withOpacity(0.6),
                   letterSpacing: 1.5,
                 ),
               ),
@@ -117,11 +117,11 @@ class _AdminPersonalInfoScreenState extends State<AdminPersonalInfoScreen> {
                 style: AppTextStyles.bodyMedium.copyWith(color: colorScheme.onSurfaceVariant),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
+                  fillColor: colorScheme.surfaceContainerLow.withOpacity(0.5),
                   prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                    borderSide: BorderSide(color: colorScheme.onSurface.withOpacity(0.1)),
                   ),
                 ),
               ),
@@ -140,7 +140,7 @@ class _AdminPersonalInfoScreenState extends State<AdminPersonalInfoScreen> {
                   prefixIcon: const Icon(Icons.person_outline, color: AppColors.primaryAccent),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                    borderSide: BorderSide(color: colorScheme.onSurface.withOpacity(0.1)),
                   ),
                 ),
               ),
@@ -159,7 +159,7 @@ class _AdminPersonalInfoScreenState extends State<AdminPersonalInfoScreen> {
                   prefixIcon: const Icon(Icons.work_outline, color: AppColors.primaryAccent),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                    borderSide: BorderSide(color: colorScheme.onSurface.withOpacity(0.1)),
                   ),
                 ),
               ),

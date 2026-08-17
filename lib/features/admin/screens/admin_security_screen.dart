@@ -88,7 +88,7 @@ class _AdminSecurityScreenState extends State<AdminSecurityScreen> {
               Text(
                 'MODIFIER LE MOT DE PASSE',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  color: colorScheme.onSurfaceVariant.withOpacity(0.6),
                   letterSpacing: 1.5,
                 ),
               ),
@@ -116,7 +116,7 @@ class _AdminSecurityScreenState extends State<AdminSecurityScreen> {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                    borderSide: BorderSide(color: colorScheme.onSurface.withOpacity(0.1)),
                   ),
                 ),
               ),
@@ -139,7 +139,7 @@ class _AdminSecurityScreenState extends State<AdminSecurityScreen> {
                   prefixIcon: const Icon(Icons.lock_reset, color: AppColors.primaryAccent),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                    borderSide: BorderSide(color: colorScheme.onSurface.withOpacity(0.1)),
                   ),
                 ),
               ),
@@ -150,7 +150,7 @@ class _AdminSecurityScreenState extends State<AdminSecurityScreen> {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.amber,
+                    backgroundColor: Colors.amber,
                     foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),

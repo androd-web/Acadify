@@ -77,7 +77,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isError ? Colors.redAccent : AppColors.primaryAccent.withValues(alpha: 0.5),
+            color: isError ? Colors.redAccent : AppColors.primaryAccent.withOpacity(0.5),
             width: 1.5,
           ),
         ),
@@ -156,7 +156,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     height: 100,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.amber, width: 3),
+                      border: Border.all(color: Colors.amber, width: 3),
                       image: const DecorationImage(
                         image: NetworkImage(
                           'https://lh3.googleusercontent.com/aida-public/AB6AXuCCOxKKLpHAVjSrjqm4h5iRLVRGOg7RoN-QBy004hXaEIEezVv3BkOUDiLm-XGj0-7ONMbv3OjnDV4yaxcS_cjOH_6GlYnEhkydfRNGzqWeenKHVwPixU3ZcQVtgkeWJWeH2lq0wChXwC7qU7y4sDmCFaHNWuzwjnaNbMUG3UtrllRgw4I1_8bDvrFKsJe5Tpr5FRKrczFbGBnzoNlrC1yNEvihL72HAMqtF3L71lGMlQGeImik6UWai3-IkNMkzUZ1y6E6Ue-dZNId',
@@ -175,14 +175,14 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.amber.withValues(alpha: 0.1),
+                      color: Colors.amber.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
                     ),
                     child: Text(
                       'ADMINISTRATEUR',
                       style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.amber,
+                        color: Colors.amber,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.2,
                       ),
@@ -201,7 +201,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               decoration: BoxDecoration(
                 color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
+                border: Border.all(color: colorScheme.onSurface.withOpacity(0.08)),
               ),
               child: Column(
                 children: [
@@ -220,7 +220,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               decoration: BoxDecoration(
                 color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.08)),
+                border: Border.all(color: colorScheme.onSurface.withOpacity(0.08)),
               ),
               child: Column(
                 children: [
@@ -271,7 +271,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
       child: Text(
         title,
         style: AppTextStyles.labelSmall.copyWith(
-          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+          color: colorScheme.onSurfaceVariant.withOpacity(0.6),
           letterSpacing: 1.5,
         ),
       ),
@@ -282,7 +282,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(icon, color: AppColors.amber, size: 22),
+        Icon(icon, color: Colors.amber, size: 22),
         const SizedBox(width: 16),
         Expanded(
           child: Column(
