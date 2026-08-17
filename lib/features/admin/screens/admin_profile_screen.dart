@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import 'admin_personal_info_screen.dart';
+import 'admin_security_screen.dart';
 
 class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({super.key});
@@ -30,14 +32,12 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        // On cherche dans la collection 'users' le document correspondant à l'UID
         final doc = await _firestore.collection('users').doc(user.uid).get();
         if (doc.exists) {
           setState(() {
             _adminData = doc.data();
           });
         } else {
-          // Si pas encore de doc (ex: test), on simule avec des données propres
           setState(() {
             _adminData = {
               'name': user.displayName ?? 'Admin Principal',
@@ -48,7 +48,6 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           });
         }
       } else {
-        // Données de secours pour le développement/test
         setState(() {
           _adminData = {
             'name': 'Administrateur Acadify',
@@ -112,190 +111,6 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  // Boîte de dialogue pour modifier les informations personnelles
-  void _editPersonalInfos() {
-    final nameController = TextEditingController(text: _adminData?['name']);
-    final posteController = TextEditingController(text: _adminData?['poste'] ?? 'Non spécifié');
-    final colorScheme = Theme.of(context).colorScheme;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Modifier mes informations',
-                style: AppTextStyles.headlineMedium.copyWith(fontSize: 20),
-              ),
-              const SizedBox(height: 20),
-              _buildBottomSheetTextField('Nom complet', nameController),
-              const SizedBox(height: 16),
-              _buildBottomSheetTextField('Poste / Fonction administrative', posteController),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () async {
-                    final user = _auth.currentUser;
-                    if (user != null) {
-                      await _firestore.collection('users').doc(user.uid).update({
-                        'name': nameController.text.trim(),
-                        'poste': posteController.text.trim(),
-                      });
-                      await _loadAdminData();
-                      if (context.mounted) Navigator.pop(context);
-                      _showCustomSnackBar('Informations mises à jour avec succès !');
-                    }
-                  },
-                  child: const Text('Enregistrer les modifications'),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Boîte de dialogue pour modifier le mot de passe
-  void _editSecurity() {
-    final passwordController = TextEditingController();
-    final colorScheme = Theme.of(context).colorScheme;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Sécurité & Mot de passe',
-                style: AppTextStyles.headlineMedium.copyWith(fontSize: 20),
-              ),
-              const SizedBox(height: 20),
-              _buildBottomSheetTextField('Nouveau mot de passe', passwordController, obscureText: true),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.amber,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () async {
-                    if (passwordController.text.trim().length < 6) {
-                      _showCustomSnackBar('Le mot de passe doit contenir au moins 6 caractères !', isError: true);
-                      return;
-                    }
-                    final user = _auth.currentUser;
-                    if (user != null) {
-                      try {
-                        await user.updatePassword(passwordController.text.trim());
-                        await _firestore.collection('users').doc(user.uid).update({
-                          'password': passwordController.text.trim(),
-                        });
-                        if (context.mounted) Navigator.pop(context);
-                        _showCustomSnackBar('Mot de passe modifié avec succès !');
-                      } catch (e) {
-                        if (context.mounted) Navigator.pop(context);
-                        _showCustomSnackBar('Erreur : Reconnectez-vous avant de changer le mot de passe.', isError: true);
-                      }
-                    }
-                  },
-                  child: const Text('Mettre à jour le mot de passe', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomSheetTextField(String label, TextEditingController controller, {bool obscureText = false}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTextStyles.labelMedium.copyWith(color: colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          style: AppTextStyles.bodyMedium,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: colorScheme.surfaceContainerLow,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.1)),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -392,7 +207,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                 children: [
                   _buildInfoRow(Icons.email_outlined, 'Email Académique', email),
                   const Divider(height: 24),
-                  _buildInfoRow(Icons.work_outline, 'Poste / Fonction', poste),
+                  _buildInfoRow(Icons.work_outline, 'Poste / Direction', poste),
                 ],
               ),
             ),
@@ -413,14 +228,31 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     Icons.person_outline,
                     'Informations personnelles',
                     'Modifier votre nom et votre poste',
-                    _editPersonalInfos,
+                    () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AdminPersonalInfoScreen(
+                            adminData: _adminData ?? {},
+                            onUpdate: _loadAdminData,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const Divider(height: 1),
                   _buildActionRow(
                     Icons.lock_outline,
                     'Sécurité & Mot de passe',
                     'Mettre à jour votre mot de passe',
-                    _editSecurity,
+                    () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AdminSecurityScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
